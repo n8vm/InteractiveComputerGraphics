@@ -32,6 +32,8 @@ if(WIN32)
   find_path(Vulkan_INCLUDE_DIR
     NAMES vulkan/vulkan.h
     PATHS
+      "../Dependencies/vulkan/Include"
+      "./Dependencies/vulkan/Include"
       "$ENV{VULKAN_SDK}/Include"
     )
 
@@ -40,12 +42,16 @@ if(WIN32)
       NAMES vulkan-1
       PATHS
         "$ENV{VULKAN_SDK}/Lib"
+        "../Dependencies/vulkan/Lib"
+        "./Dependencies/vulkan/Lib"
         "$ENV{VULKAN_SDK}/Bin"
         )
   elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
     find_library(Vulkan_LIBRARY
       NAMES vulkan-1
       PATHS
+        "../Dependencies/vulkan/Lib32"
+        "./Dependencies/vulkan/Lib32"
         "$ENV{VULKAN_SDK}/Lib32"
         "$ENV{VULKAN_SDK}/Bin32"
         NO_SYSTEM_ENVIRONMENT_PATH
@@ -55,10 +61,14 @@ else()
     find_path(Vulkan_INCLUDE_DIR
       NAMES vulkan/vulkan.h
       PATHS
+        "../Dependencies/vulkan/include"
+        "./Dependencies/vulkan/include"
         "$ENV{VULKAN_SDK}/include")
     find_library(Vulkan_LIBRARY
       NAMES vulkan
       PATHS
+        "../Dependencies/vulkan/lib"
+        "./Dependencies/vulkan/lib"
         "$ENV{VULKAN_SDK}/lib")
 endif()
 

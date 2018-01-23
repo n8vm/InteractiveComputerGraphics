@@ -23,6 +23,8 @@ if (WIN32)
 		GLM_INCLUDE_DIR
 		NAMES glm/glm.hpp
 		PATHS
+		"../Dependencies/glm"
+        "./Dependencies/glm"
 		$ENV{GLM_ROOT_DIR}
 		${GLM_ROOT_DIR}
 		$ENV{GLM_ROOT_DIR}/include
@@ -34,6 +36,8 @@ else()
 		GLM_INCLUDE_DIR
 		NAMES glm/glm.hpp
 		PATHS
+		"../Dependencies/glm"
+        "./Dependencies/glm"
 		/usr/include
 		/usr/local/include
 		/sw/include

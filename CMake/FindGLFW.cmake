@@ -37,6 +37,8 @@ find_path( GLFW_INCLUDE_DIR
         "${GLFW_LOCATION}/include"
         "$ENV{GLFW_LOCATION}/include"
     PATHS
+        "../Dependencies/GLFW/include"
+        "./Dependencies/GLFW/include"
         "$ENV{PROGRAMFILES}/GLFW/include"
         "${OPENGL_INCLUDE_DIR}"
         /usr/openwin/share/include
@@ -62,6 +64,8 @@ find_path( GLFW_INCLUDE_DIR
         "${GLFW_LOCATION}/include"
         "$ENV{GLFW_LOCATION}/include"
     PATHS
+        "../Dependencies/GLFW/include"
+        "./Dependencies/GLFW/include"
         "$ENV{PROGRAMFILES}/GLFW/include"
         "${OPENGL_INCLUDE_DIR}"
         /usr/openwin/share/include
@@ -103,6 +107,14 @@ if (WIN32)
                 glfw
                 glfw3
             HINTS
+                "../Dependencies/GLFW/lib"
+                "../Dependencies/GLFW/lib/x64"
+                "../Dependencies/GLFW/lib-msvc110"
+                "../Dependencies/GLFW/lib-vc2012"
+                "./Dependencies/GLFW/lib"
+                "./Dependencies/GLFW/lib/x64"
+                "./Dependencies/GLFW/lib-msvc110"
+                "./Dependencies/GLFW/lib-vc2012"
                 "${GLFW_LOCATION}/lib"
                 "${GLFW_LOCATION}/lib/x64"
                 "${GLFW_LOCATION}/lib-msvc110"
@@ -112,6 +124,8 @@ if (WIN32)
                 "$ENV{GLFW_LOCATION}/lib-msvc110"
                 "$ENV{GLFW_LOCATION}/lib-vc2012"
             PATHS
+                "../Dependencies/GLFW/lib"
+                "./Dependencies/GLFW/lib"
                 "$ENV{PROGRAMFILES}/GLFW/lib"
                 "${OPENGL_LIBRARY_DIR}"
             DOC 
@@ -125,6 +139,10 @@ else ()
                 glfw
                 glfw3
             HINTS
+                "../Dependencies/GLFW/lib"
+                "./Dependencies/GLFW/lib"
+                "../Dependencies/GLFW/lib/cocoa"
+                "./Dependencies/GLFW/lib/cocoa"
                 "${GLFW_LOCATION}/lib"
                 "${GLFW_LOCATION}/lib/cocoa"
                 "$ENV{GLFW_LOCATION}/lib"
@@ -165,11 +183,19 @@ else ()
                 glfw
                 glfw3
             HINTS
+                "../Dependencies/GLFW/lib64"
+                "./Dependencies/GLFW/lib64"
+                "../Dependencies/GLFW/lib"
+                "./Dependencies/GLFW/lib"
                 "${GLFW_LOCATION}/lib"
                 "$ENV{GLFW_LOCATION}/lib"
                 "${GLFW_LOCATION}/lib/x11"
                 "$ENV{GLFW_LOCATION}/lib/x11"
             PATHS
+                "../Dependencies/GLFW/lib64"
+                "./Dependencies/GLFW/lib64"
+                "../Dependencies/GLFW/lib"
+                "./Dependencies/GLFW/lib"
                 /usr/lib64
                 /usr/lib
                 /usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}

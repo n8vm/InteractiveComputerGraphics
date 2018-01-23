@@ -1,0 +1,10 @@
+include(${PROJECT_SOURCE_DIR}/CMakeGenerateHierarchy.txt)
+set(VKDK_SRC 
+	${CMAKE_CURRENT_SOURCE_DIR}/vkdk.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/vkdk.hpp)
+
+add_library(VKDK STATIC ${VKDK_SRC})
+target_include_directories(VKDK PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# IDE Folder Hierarchy Generation
+generate_folder_hierarchy("${VKDK_SRC}")

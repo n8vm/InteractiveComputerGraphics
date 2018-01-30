@@ -1,0 +1,5 @@
+set (Cameras_SRC 
+	${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+	${CMAKE_CURRENT_SOURCE_DIR}/Camera.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/OrbitCamera.hpp
+	PARENT_SCOPE)

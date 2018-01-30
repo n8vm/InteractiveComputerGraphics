@@ -1,14 +1,21 @@
-#pragma once
+//#pragma once
 #include <thread>
 
-//#include "Entities/Entity.h"
+#include "Entities/Entity.hpp"
+#include "Components/Mesh.hpp"
+#include "Components/Materials/Material.hpp"
+
+#include "vkdk.hpp"
 #include <unordered_map>
 
-//using namespace Entities;
-//using namespace Materials;
+
+/* For some reason, if i dont use standard here, the system namespace doesn't appear anywhere else */
 using namespace std;
 
 namespace System {
+//using namespace Entities;
+//using namespace Materials;
+	
 	/* Threads */
 	extern thread *UpdateThread;
 	extern thread *RaycastThread;
@@ -16,8 +23,9 @@ namespace System {
 
 	extern int UpdateRate;
 	extern int FrameRate;
+	extern int currentImageIndex;
 
-	//extern Entity World;
+	extern Entities::Entity World;
 	//extern Entity Screen;
 
 	/* The entity whose forward vector is used for ray casting. */
@@ -28,8 +36,8 @@ namespace System {
 	/* To do: add camera here */
 
 	//extern unordered_map<string, std::shared_ptr<Texture>> TextureList;
-	//extern unordered_map<string, std::shared_ptr<Material>> MaterialList;
-	//extern unordered_map<string, std::shared_ptr<obj::Model>> ModelList;
+	extern unordered_map<std::string, std::shared_ptr<Components::Materials::Material>> MaterialList;
+	extern unordered_map<std::string, std::shared_ptr<Components::Mesh>> MeshList;
 
 	extern void UpdateLoop();
 	extern void RaycastLoop();

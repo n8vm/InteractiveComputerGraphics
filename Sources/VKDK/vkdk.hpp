@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <iostream>
 //#define GL_LOG_FILE "gl.log"
+#include "objload.h"
 
 namespace VKDK {
 	/* ------------------------------------------*/
@@ -82,6 +83,8 @@ namespace VKDK {
 	extern VkSemaphore imageAvailableSemaphore;
 	extern VkSemaphore renderFinishedSemaphore;
 	extern VkDebugReportCallbackEXT callback;
+	extern VkDescriptorPool descriptorPool;
+
 
 	/* ------------------------------------------*/
 	/* FUNCTIONS                                 */
@@ -131,6 +134,9 @@ namespace VKDK {
 	/* Create Render Pass */
 	extern void CreateRenderPass();
 
+	/* Create Descriptor Set */
+	extern void CreateDescriptorSetLayout();
+
 	/* Create Graphics Pipeline */
 	extern void CreateGraphicsPipeline();
 	extern VkShaderModule createShaderModule(const std::vector<char>& code);
@@ -141,8 +147,37 @@ namespace VKDK {
 	/* Create Command Pools */
 	extern void CreateCommandPools();
 	
+	/* Create Depth Resources */
+	extern void CreateDepthResources();
+
+	/* Create Texture Image */
+	extern void CreateTextureImage();
+
+	/* Create Texture Image View */
+	extern void CreateTextureImageView();
+
+	/* Create Texture Sampler */
+	extern void CreateTextureSampler();
+
+	extern void LoadModel();
+
+	/* Create Vertex Buffer */
+	extern void CreateVertexBuffer();
+	extern void CreateIndexBuffer();
+	extern void CreateUniformBuffer();
+	extern void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	extern void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+	/* Create Descriptor Pool */
+	extern void CreateDescriptorPool();
+
+	/* Create Descriptor Set */
+	extern void CreateDescriptorSet();
+
 	/* Create Command Buffers */
 	extern void CreateCommandBuffers();
+	extern void StartCommandBufferRecording(int imageIndex);
+	extern void StopCommandBufferRecording(int imageIndex);
 
 	/* Create Semaphores */
 	extern void CreateSemaphores();
@@ -151,15 +186,19 @@ namespace VKDK {
 	extern void OnWindowResized(GLFWwindow* window, int width, int height);
 	extern void ErrorCallback(int _error, const char* description);
 	
+
 	/* Misc Functions */
 	extern void print(std::string s, bool forced = false);
 	extern std::string loadFile(std::string name);
 	extern bool ShouldClose();
 	
-	extern void DrawFrame();
+	extern void DrawFrame(uint32_t imageIndex);
 	extern void TestDraw1();
+	extern void UpdateUniformBuffer();
 	extern bool OptimizeSwapchain(int swapchainResult);
+	uint32_t GetNextImageIndex();
 	extern void RecreateSwapChain();
+	extern bool SwapChainOutOfDate;
 	extern void SetClearColor(float r, float g, float b, float a);
 
 	/* Cleanup */

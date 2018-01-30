@@ -1,7 +1,11 @@
 add_subdirectory(SEC)
 add_subdirectory(VKDK)
 
-set(SHARED_SRC )
+add_subdirectory(Options)
+
+set(SHARED_SRC 
+  ${Options_SRC}
+)
 
 set (SHARED_KRNL )
 
@@ -13,6 +17,15 @@ set(PRJ1_SRC
   ${SHARED_KRNL}
   ${SHARED_SHDR}
   ${CMAKE_CURRENT_SOURCE_DIR}/Main/Prj1Main.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+  PARENT_SCOPE)
+
+# PRJ2
+set(PRJ2_SRC 
+  ${SHARED_SRC}
+  ${SHARED_KRNL}
+  ${SHARED_SHDR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/Main/Prj2Main.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
   PARENT_SCOPE)
 

@@ -1,5 +1,8 @@
 include(${PROJECT_SOURCE_DIR}/CMakeGenerateHierarchy.txt)
 set(VKDK_SRC 
+	${CMAKE_CURRENT_SOURCE_DIR}/objload.h
+	${CMAKE_CURRENT_SOURCE_DIR}/tiny_obj_loader.h
+	${CMAKE_CURRENT_SOURCE_DIR}/stb_image.h
 	${CMAKE_CURRENT_SOURCE_DIR}/vkdk.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/vkdk.hpp)
 

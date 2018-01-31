@@ -15,7 +15,7 @@ namespace System {
 	//Entity Screen = Entity();
 
 	//unordered_map<string, std::shared_ptr<Texture>> TextureList;
-	unordered_map<string, shared_ptr<Components::Materials::Material>> MaterialList;
+	//unordered_map<string, shared_ptr<Components::Materials::Material>> MaterialList;
 	unordered_map<string, shared_ptr<Components::Mesh>> MeshList;
 
 	//std::shared_ptr<Entity> Raycaster;

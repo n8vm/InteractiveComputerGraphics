@@ -7,9 +7,10 @@ namespace Components {
 		/* A material defines a render interface, and cannot be instantiated directly. */
 		class Material {
 		public:
-			virtual void render(std::shared_ptr<Components::Mesh> mesh, glm::mat4 model, glm::mat4 view, glm::mat4 projection) = 0;
+			virtual void render(std::shared_ptr<Components::Mesh> mesh) = 0;
+			virtual void update(glm::mat4 model, glm::mat4 view, glm::mat4 projection) = 0;
 			virtual void cleanup() = 0;
-			virtual void refresh() = 0;
+
 		protected:
 			/* Helper function for reading in SPIR-V files */
 			static std::vector<char> readFile(const std::string& filename) {

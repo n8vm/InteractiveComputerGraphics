@@ -5,13 +5,19 @@ namespace Entities::Cameras {
 	/* A perspective gamera*/
 	class OrbitCamera : public Camera {
 	public:
-		OrbitCamera(glm::vec3 initialPos = glm::vec3(0.0), glm::vec3 rotatePoint = glm::vec3(0), glm::quat initialRot = glm::quat(1.0f, 0.0f, 0.0f, 0.0f)) {
+		OrbitCamera(glm::vec3 initialPos = glm::vec3(0.0), glm::vec3 rotatePoint = glm::vec3(0)) {
+			using namespace glm;
 			transform.SetPosition(initialPos);
+
+			initialRot = conjugate(glm::toQuat(lookAt(initialPos, rotatePoint, transform.worldUp)));
 			transform.SetRotation(initialRot);
 
 			this->initialPos = initialPos;
 			this->initialRot = initialRot;
 			this->rotatePoint = rotatePoint;
+			
+			/* Create perspective transformation */
+			P = glm::perspective(fov, aspectRatio, nearClippingPlane, farClippingPlane);
 		}
 
 		void handleArrowKeys() {
@@ -41,8 +47,8 @@ namespace Entities::Cameras {
 				}
 				else {
 					glfwGetCursorPos(VKDK::DefaultWindow, &newXPos, &newYPos);
-					yawVelocity += (oldXPos - newXPos) * rotationAcceleration;
-					pitchVelocity += (oldYPos - newYPos) * rotationAcceleration;
+					yawVelocity += -(newXPos - oldXPos) * rotationAcceleration;
+					pitchVelocity += -(newYPos - oldYPos) * rotationAcceleration;
 					oldXPos = newXPos;
 					oldYPos = newYPos;
 				}
@@ -96,19 +102,14 @@ namespace Entities::Cameras {
 			yawVelocity -= yawVelocity * rotateResistance;
 			pitchVelocity -= pitchVelocity * rotateResistance;
 
-			transform.AddPosition(glm::normalize(rotatePoint - transform.position) * zoomVelocity);
+			transform.AddPosition(glm::normalize(rotatePoint - transform.GetPosition()) * zoomVelocity);
 
-			glm::vec3 currentRight = transform.right;
-			glm::vec3 currentUp = transform.up;
+			glm::vec3 currentRight = transform.right.load();
+			glm::vec3 currentUp = transform.up.load();
 
 			transform.RotateAround(rotatePoint, currentRight, pitchVelocity);
 			transform.RotateAround(rotatePoint, currentUp, yawVelocity);
 
-			/* Construct object space lookat */
-			V = glm::lookAt(transform.position, transform.position + transform.forward, transform.up);
-
-			/* Create perspective transformation */
-			P = glm::perspective(fov, aspectRatio, nearClippingPlane, farClippingPlane);
 		}
 
 		void setWindowSize(int width, int height) {
@@ -117,15 +118,13 @@ namespace Entities::Cameras {
 			assert(aspectRatio > 0);
 			if (aspectRatio > 0) {
 				this->aspectRatio = aspectRatio;
+				P = glm::perspective(fov, aspectRatio, nearClippingPlane, farClippingPlane);
+
 			}
 		}
 
-		glm::mat4 getModel() {
-			return glm::mat4(1.0); 
-		}
-
 		glm::mat4 getView() {
-			return V;
+			return transform.ParentToLocalMatrix();
 		}
 
 		glm::mat4 getProjection() {
@@ -138,7 +137,7 @@ namespace Entities::Cameras {
 		glm::vec3 rotatePoint;
 
 		float zoomVelocity = 0.0f;
-		float zoomAcceleration = .1f;
+		float zoomAcceleration = .01f;
 		float zoomResistance = .1f;
 
 		float yawVelocity = 0.0f;

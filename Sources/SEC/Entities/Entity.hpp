@@ -63,7 +63,11 @@ namespace Entities {
 			}
 		};
 
+		void(*updateCallback) (Entity*) = nullptr;
+
 		virtual void update() {
+			if (updateCallback) updateCallback(this);
+
 			for (auto i : children) {
 				if (i.second.get()->active) {
 					i.second->update();
@@ -71,6 +75,13 @@ namespace Entities {
 			}
 		};
 	
+		virtual void cleanup() {
+			for (auto i : children) {
+				i.second->cleanup();
+			}
+		};
+
+
 		/* Each entity receives a recursive point and direction, such that p and d */
 		virtual void raycast(glm::vec4 point, glm::vec4 direction) {
 			for (auto i : children) {

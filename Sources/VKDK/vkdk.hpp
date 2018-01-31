@@ -17,6 +17,14 @@
 //#define GL_LOG_FILE "gl.log"
 #include "objload.h"
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <memory>
+
+#define NUM_DESCRIPTOR_SETS 10
+
 namespace VKDK {
 	/* ------------------------------------------*/
 	/* STRUCTS                                   */

@@ -9,6 +9,10 @@ namespace Entities {
 		/* A model has a list of material components, which are used to render it */
 		std::vector < std::shared_ptr<Components::Materials::Material> > materials;
 
+		VkBuffer uniformBuffer;
+		VkDeviceMemory uniformBufferMemory;
+		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		
 		/* A model has a mesh component, which is used by the materials for rendering */
 		std::shared_ptr<Components::Mesh> mesh;
 
@@ -16,15 +20,17 @@ namespace Entities {
 		virtual void render(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
 			glm::mat4 new_model = model * transform.LocalToParentMatrix();
 			for (int i = 0; i < materials.size(); ++i) {
-				materials[i]->render(mesh, new_model, view, projection);
+				materials[i]->update(new_model, view, projection); // TODO: move to update thread 
+				materials[i]->render(mesh);
 			}
 
 			Entity::render(model, view, projection);
 		};
 
-		void update() {
-			/* Temporary */
-			this->transform.AddRotation(glm::angleAxis(0.01f, glm::vec3(0.0, 0.0, 1.0)));
+		void cleanup() {
+			for (auto &mat : materials) {
+				mat->cleanup();
+			}
 		}
 
 		void setMesh(std::shared_ptr<Components::Mesh> mesh) {

@@ -33,7 +33,7 @@ void System::RenderLoop() {
 		if (oldWidth != width || oldHeight != height) {
 			oldWidth = width; oldHeight = height;
 			camera->setWindowSize(width, height);
-			for (auto &mat : System::MaterialList) mat.second->refresh();
+			Components::Materials::HaloMaterials::UniformColoredPoints::RefreshPipeline();
 			continue;
 		};
 
@@ -45,7 +45,7 @@ void System::RenderLoop() {
 		VKDK::StartCommandBufferRecording(currentImageIndex);
 
 		// get camera working 
-		System::World.render(camera->getModel(), camera->getView(), camera->getProjection());
+		System::World.render(glm::mat4(1.0), camera->getView(), camera->getProjection());
 
 		/* Stop recording the command buffer */
 		VKDK::StopCommandBufferRecording(currentImageIndex);
@@ -59,34 +59,75 @@ void System::RenderLoop() {
 
 void System::SetupComponents() {
 	using namespace Components;
+	using namespace Materials;
 	using namespace std;
 
+	/* Initialize Materials */
+	Materials::HaloMaterials::UniformColoredPoints::Initialize(3);
+	
 	/* Load the model (by default, a teapot) */
 	shared_ptr<Mesh> mesh = make_shared<Mesh>();
 	mesh->loadFromOBJ(Options::objLocation);
 	MeshList.emplace("mesh", mesh);
+}
 
-	/* Create a material for that mesh */
-	shared_ptr<Materials::HaloMaterials::UniformColoredPoints> pointMaterial
-		= make_shared<Materials::HaloMaterials::UniformColoredPoints>();
-	pointMaterial->setColor(1.0, 0.0, 0.0, 1.0);
-	MaterialList.emplace("pointMaterial", pointMaterial);
+void UpdateTeapot1(Entities::Entity *teapot) {
+	teapot->transform.AddRotation(glm::angleAxis(0.01f, glm::vec3(0.0, 0.0, 1.0)));
+}
+
+void UpdateTeapot2(Entities::Entity *teapot) {
+	teapot->transform.AddRotation(glm::angleAxis(-0.015f, glm::vec3(0.0, 0.0, 1.0)));
+}
+
+void UpdateTeapot3(Entities::Entity *teapot) {
+	teapot->transform.AddRotation(glm::angleAxis(-0.005f, glm::vec3(0.0, 0.0, 1.0)));
 }
 
 void System::SetupEntities() {
+	using namespace std;
 	using namespace Entities;
+	using namespace Components::Materials;
+
+	/* Create a material for that mesh */
+	auto redPoints = make_shared<HaloMaterials::UniformColoredPoints>();
+	redPoints->setColor(1.0, 0.0, 0.0, 1.0);
+
+	auto greenPoints = make_shared<HaloMaterials::UniformColoredPoints>();
+	greenPoints->setColor(0.0, 1.0, 0.0, 1.0);
+
+	auto bluePoints = make_shared<HaloMaterials::UniformColoredPoints>();
+	bluePoints->setColor(0.0, 0.0, 1.0, 1.0);	
 
 	/* Create an entity with the provided mesh and model */
-	std:shared_ptr<Entities::Model> model = make_shared<Model>();
-	model->setMesh(MeshList["mesh"]);
-	model->addMaterial(MaterialList["pointMaterial"]);
-	World.addObject("model", model);
+	std::shared_ptr<Entities::Model> redTeapot = make_shared<Model>();
+	redTeapot->transform.SetPosition(-1.5, 0.0, 0.0);
+	redTeapot->transform.SetScale(.1, .1, .1);
+	redTeapot->setMesh(MeshList["mesh"]);
+	redTeapot->addMaterial(redPoints);
+	redTeapot->updateCallback = &UpdateTeapot1;
+	World.addObject("redTeapot", redTeapot);
+
+	std::shared_ptr<Entities::Model> greenTeapot = make_shared<Model>();
+	greenTeapot->transform.SetPosition(0.0, -1.5, 0.0);
+	greenTeapot->transform.SetScale(.1, .1, .1);
+	greenTeapot->setMesh(MeshList["mesh"]);
+	greenTeapot->addMaterial(greenPoints);
+	greenTeapot->updateCallback = &UpdateTeapot2;
+	World.addObject("greenTeapot", greenTeapot);
+
+	std::shared_ptr<Entities::Model> blueTeapot = make_shared<Model>();
+	blueTeapot->transform.SetPosition(1.5, 0.0, 0.0);
+	blueTeapot->transform.SetScale(.1, .1, .1);
+	blueTeapot->setMesh(MeshList["mesh"]);
+	blueTeapot->addMaterial(bluePoints);
+	blueTeapot->updateCallback = &UpdateTeapot3;
+	World.addObject("blueTeapot", blueTeapot);
 
 	glm::vec3 centriod = MeshList["mesh"]->getCentroid();
+	centriod *= .1;
 
 	/* Create an orbit camera to look at the model */
-	std::shared_ptr<Entities::Cameras::OrbitCamera> camera = 
-		make_shared<Entities::Cameras::OrbitCamera>(glm::vec3(0.0, 0.0, 40.0), centriod);
+	auto camera = make_shared<Cameras::OrbitCamera>(glm::vec3(0.0, -5.0, 5.0), centriod);
 	World.addObject("camera", camera);
 }
 
@@ -105,16 +146,12 @@ void System::Terminate() {
 	System::quit = true;
 
 	System::UpdateThread->join();
-	
 	delete(System::UpdateThread);
+	
+	for (auto &mesh : MeshList) { mesh.second->cleanup(); }
+	System::World.cleanup();
 
-	for (auto &mesh : MeshList) {
-		mesh.second->cleanup();
-	}
-
-	for (auto &material : MaterialList) {
-		material.second->cleanup();
-	}
+	Components::Materials::HaloMaterials::UniformColoredPoints::Destroy();
 }
 
 int main(int argc, char** argv) {

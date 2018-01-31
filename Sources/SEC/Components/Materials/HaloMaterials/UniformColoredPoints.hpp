@@ -10,34 +10,60 @@
 namespace Components::Materials::HaloMaterials {
 	class UniformColoredPoints : public Material {
 	public:
-		UniformColoredPoints() : Material() {
-			createUniformBuffer();
+		static void Initialize(int maxDescriptorSets) {
+			UniformColoredPoints::maxDescriptorSets = maxDescriptorSets;
 			createDescriptorSetLayout();
-			createDescriptorSet();
-
+			createDescriptorPool();
 			setupGraphicsPipeline();
 		}
 
-		void cleanup() {
+		static void Destroy() {
+			/* Clean up descriptor pool, descriptor layout, pipeline layout, and pipeline */
+			vkDestroyDescriptorPool(VKDK::device, descriptorPool, nullptr);
 			vkDestroyDescriptorSetLayout(VKDK::device, descriptorSetLayout, nullptr);
-			vkFreeDescriptorSets(VKDK::device, VKDK::descriptorPool, 1, &descriptorSet);
-
-			/* Destroy the graphics pipeline for this material */
 			vkDestroyPipelineLayout(VKDK::device, pipelineLayout, nullptr);
 			vkDestroyPipeline(VKDK::device, graphicsPipeline, nullptr);
+		}
 
+		/* Primarily used to account for render pass changes */
+		static void RefreshPipeline() {
+			vkDestroyPipelineLayout(VKDK::device, pipelineLayout, nullptr);
+			vkDestroyPipeline(VKDK::device, graphicsPipeline, nullptr);
+			setupGraphicsPipeline();
+		}
+		
+		/* Note: one material instance per entity! Cleanup before destroying VKDK stuff */
+		UniformColoredPoints() : Material() {
+			/* Should I create a descriptor set here? If so, how many do I create?
+			
+				If only one object will be using this material, then I could create one descriptor set. 
+				However, if multiple objects intend to use the same material, then I might need multiple descriptor sets...
+
+				Thinking, maybe materials should be static, since the "state" of the material depends heavily on descriptor set...
+				
+				So, render would become a static method, which uses an initialized graphics pipeline and provided VBO, IBO, Descriptor data
+
+				How does that effect the concept of "adding" a material to an entity? 
+
+				Would be nice to wrap descriptor set info for different materials
+
+				Maybe instances of this material could coorespond to descriptor sets, and static stuff creates descriptor pools, graphics pipeline, etc
+			*/
+
+			createUniformBuffer();
+			createDescriptorSet();
+		}
+
+		void cleanup() {
+			/* Frees descriptor set and uniform buffer memory, destroys uniform buffer handle */
+			vkFreeDescriptorSets(VKDK::device, VKDK::descriptorPool, 1, &descriptorSet);
 			vkDestroyBuffer(VKDK::device, uniformBuffer, nullptr);
 			vkFreeMemory(VKDK::device, uniformBufferMemory, nullptr);
 		}
-
-		void render(std::shared_ptr<Components::Mesh> mesh, glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
-
+		
+		/* TODO: use seperate descriptor set for model view projection, update only once per update tick */
+		void update(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
 			/* Update uniform buffer */
-			static auto startTime = std::chrono::high_resolution_clock::now();
-
-			auto currentTime = std::chrono::high_resolution_clock::now();
-			float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
 			UniformBufferObject ubo = {};
 			ubo.model = model;
 			ubo.view = view;
@@ -46,13 +72,14 @@ namespace Components::Materials::HaloMaterials {
 			ubo.pointSize = pointSize;
 			ubo.color = color;
 
-														/* Map uniform buffer, copy data directly, then unmap */
+			/* Map uniform buffer, copy data directly, then unmap */
 			void* data;
 			vkMapMemory(VKDK::device, uniformBufferMemory, 0, sizeof(ubo), 0, &data);
 			memcpy(data, &ubo, sizeof(ubo));
 			vkUnmapMemory(VKDK::device, uniformBufferMemory);
+		}
 
-
+		void render(std::shared_ptr<Mesh> mesh) {
 			/* Bind the pipeline for this material */
 			vkCmdBindPipeline(VKDK::commandBuffers[System::currentImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
@@ -61,24 +88,15 @@ namespace Components::Materials::HaloMaterials {
 			VkBuffer indexBuffer = mesh->getIndexBuffer();
 			uint32_t totalIndices = mesh->getTotalIndices();
 
-			//VkDescriptorSet descriptorSet = ...; // TODO: create descriptor set
-
 			VkBuffer vertexBuffers[] = { vertexBuffer };
 			VkDeviceSize offsets[] = { 0 };
+
 			vkCmdBindVertexBuffers(VKDK::commandBuffers[System::currentImageIndex], 0, 1, vertexBuffers, offsets);
 			vkCmdBindIndexBuffer(VKDK::commandBuffers[System::currentImageIndex], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 			vkCmdBindDescriptorSets(VKDK::commandBuffers[System::currentImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 			/* Draw elements indexed */
 			vkCmdDrawIndexed(VKDK::commandBuffers[System::currentImageIndex], totalIndices, 1, 0, 0, 0);
-		}
-
-		void refresh() {
-			cleanup();
-			createUniformBuffer();
-			createDescriptorSetLayout();
-			createDescriptorSet();
-			setupGraphicsPipeline();
 		}
 
 		void setColor(float r, float g, float b, float a) {
@@ -90,18 +108,16 @@ namespace Components::Materials::HaloMaterials {
 		}
 
 	private:
-		glm::vec4 color = glm::vec4(1.0, 0.0, 0.0, 1.0);
-		float pointSize = 4.0;
+		/* Static material properties */
+		static VkShaderModule vertShaderModule;
+		static VkShaderModule fragShaderModule;
 
-		VkShaderModule vertShaderModule;
-		VkShaderModule fragShaderModule;
+		static VkPipelineLayout pipelineLayout;
+		static VkPipeline graphicsPipeline;
 
-		VkDescriptorSetLayout descriptorSetLayout;
-		VkDescriptorSet descriptorSet;
-
-		/* Should be sharable with all meshes using this material */
-		VkPipelineLayout pipelineLayout;
-		VkPipeline graphicsPipeline;
+		static VkDescriptorPool descriptorPool;
+		static VkDescriptorSetLayout descriptorSetLayout;
+		static uint32_t maxDescriptorSets;
 
 		struct UniformBufferObject {
 			glm::mat4 model;
@@ -110,16 +126,9 @@ namespace Components::Materials::HaloMaterials {
 			glm::vec4 color;
 			float pointSize;
 		};
-		VkBuffer uniformBuffer;
-		VkDeviceMemory uniformBufferMemory;
 
-		void createUniformBuffer() {
-			VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-			VKDK::CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, uniformBufferMemory);
-		}
-
-		void createDescriptorSetLayout() {
-			/* Each descriptor set binding needs one of these */
+		/* A descriptor set layout describes how uniforms are used in the pipeline */
+		static void createDescriptorSetLayout() {
 			VkDescriptorSetLayoutBinding uboLayoutBinding = {};
 			uboLayoutBinding.binding = 0;
 			uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -127,7 +136,6 @@ namespace Components::Materials::HaloMaterials {
 			uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 			uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
-			/* We can take these bindings and create a descriptor set layout from them. */
 			std::array<VkDescriptorSetLayoutBinding, 1> bindings = { uboLayoutBinding };
 			VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 			layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -135,96 +143,28 @@ namespace Components::Materials::HaloMaterials {
 			layoutInfo.pBindings = bindings.data();
 
 			if (vkCreateDescriptorSetLayout(VKDK::device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create descriptor set layout!");
+				throw std::runtime_error("failed to create UniformColoredPoints descriptor set layout!");
 			}
 		}
 
-		void createDescriptorSet() {
-			VkDescriptorSetLayout layouts[] = { descriptorSetLayout };
-			VkDescriptorSetAllocateInfo allocInfo = {};
-			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			allocInfo.descriptorPool = VKDK::descriptorPool;
-			allocInfo.descriptorSetCount = 1;
-			allocInfo.pSetLayouts = layouts;
+		static void createDescriptorPool() {
+			std::array<VkDescriptorPoolSize, 1> poolSizes = {};
+			poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			poolSizes[0].descriptorCount = maxDescriptorSets;
 
-			if (vkAllocateDescriptorSets(VKDK::device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
-				throw std::runtime_error("failed to allocate descriptor set!");
+			VkDescriptorPoolCreateInfo poolInfo = {};
+			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+			poolInfo.pPoolSizes = poolSizes.data();
+			poolInfo.maxSets = maxDescriptorSets;
+			poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+
+			if (vkCreateDescriptorPool(VKDK::device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create Uniform Colored Points descriptor pool!");
 			}
-
-			VkDescriptorBufferInfo bufferInfo = {};
-			bufferInfo.buffer = uniformBuffer;
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(UniformBufferObject);
-
-			/*VkDescriptorImageInfo imageInfo = {};
-			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = textureImageView;
-			imageInfo.sampler = textureSampler;*/
-
-			std::array<VkWriteDescriptorSet, 1> descriptorWrites = {};
-
-			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[0].dstSet = descriptorSet;
-			descriptorWrites[0].dstBinding = 0;
-			descriptorWrites[0].dstArrayElement = 0;
-			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrites[0].descriptorCount = 1;
-			descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-			/*descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[1].dstSet = descriptorSet;
-			descriptorWrites[1].dstBinding = 1;
-			descriptorWrites[1].dstArrayElement = 0;
-			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].pImageInfo = &imageInfo;*/
-
-			vkUpdateDescriptorSets(VKDK::device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		}
 
-
-		/* Given SPIR-V, returns a shader module. */
-		VkShaderModule createShaderModule(const std::vector<char>& code) {
-			VkShaderModuleCreateInfo createInfo = {};
-			createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-			createInfo.codeSize = code.size();
-			createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-			VkShaderModule shaderModule;
-			if (vkCreateShaderModule(VKDK::device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create shader module!");
-			}
-
-			return shaderModule;
-		}
-
-		/* Two structures are required to convey vertex info to GPU */
-		VkVertexInputBindingDescription getBindingDescription() {
-			/* The first structure is VKVertexInputBindingDescription */
-			VkVertexInputBindingDescription bindingDescription = {};
-			bindingDescription.binding = 0;
-			bindingDescription.stride = 3 * sizeof(float);
-
-			/* Move to next data entry after each vertex */
-			/* Could be move to next data entry after each instance! */
-			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-			return bindingDescription;
-		}
-
-		std::array<VkVertexInputAttributeDescription, 1> getAttributeDescriptions() {
-			/* The second structure is a VKVertexInputAttributeDescription */
-			std::array<VkVertexInputAttributeDescription, 1> attributeDescriptions = {};
-
-			attributeDescriptions[0].binding = 0;
-			attributeDescriptions[0].location = 0;
-			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attributeDescriptions[0].offset = 0;
-
-			return attributeDescriptions;
-		}
-
-		void setupGraphicsPipeline() {
+		static void setupGraphicsPipeline() {
 			/* Read in shader modules */
 			auto vertShaderCode = readFile(ResourcePath "MaterialShaders/UniformColoredPoints/vert.spv");
 			auto fragShaderCode = readFile(ResourcePath "MaterialShaders/UniformColoredPoints/frag.spv");
@@ -266,7 +206,7 @@ namespace Components::Materials::HaloMaterials {
 			vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
 			vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
 			vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-			
+
 			/* Input Assembly */
 			VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 			inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -307,7 +247,7 @@ namespace Components::Materials::HaloMaterials {
 			rasterizer.depthBiasClamp = 0.0f; // Optional
 			rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
 
-			/* Multisampling */
+																							/* Multisampling */
 			VkPipelineMultisampleStateCreateInfo multisampling = {};
 			multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 			multisampling.sampleShadingEnable = VK_FALSE;
@@ -317,7 +257,7 @@ namespace Components::Materials::HaloMaterials {
 			multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
 			multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
-			/* Depth and Stencil testing */
+																								 /* Depth and Stencil testing */
 			VkPipelineDepthStencilStateCreateInfo depthStencil = {};
 			depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 			depthStencil.depthTestEnable = VK_TRUE;
@@ -329,8 +269,8 @@ namespace Components::Materials::HaloMaterials {
 			depthStencil.stencilTestEnable = VK_FALSE;
 			depthStencil.front = {}; // Optional
 			depthStencil.back = {}; // Optional
-			
-			/* Color Blending */
+
+															/* Color Blending */
 			VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
 			colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 			colorBlendAttachment.blendEnable = VK_FALSE;
@@ -352,7 +292,7 @@ namespace Components::Materials::HaloMaterials {
 			colorBlending.blendConstants[2] = 0.0f; // Optional
 			colorBlending.blendConstants[3] = 0.0f; // Optional
 
-			/* Dynamic State */
+																							/* Dynamic State */
 			VkDynamicState dynamicStates[] = {
 				VK_DYNAMIC_STATE_VIEWPORT,
 				VK_DYNAMIC_STATE_LINE_WIDTH
@@ -403,5 +343,101 @@ namespace Components::Materials::HaloMaterials {
 			vkDestroyShaderModule(VKDK::device, fragShaderModule, nullptr);
 			vkDestroyShaderModule(VKDK::device, vertShaderModule, nullptr);
 		}
+
+		static VkShaderModule createShaderModule(const std::vector<char>& code) {
+			VkShaderModuleCreateInfo createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			createInfo.codeSize = code.size();
+			createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+			VkShaderModule shaderModule;
+			if (vkCreateShaderModule(VKDK::device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create shader module!");
+			}
+
+			return shaderModule;
+		}
+
+		static VkVertexInputBindingDescription getBindingDescription() {
+			/* The first structure is VKVertexInputBindingDescription */
+			VkVertexInputBindingDescription bindingDescription = {};
+			bindingDescription.binding = 0;
+			bindingDescription.stride = 3 * sizeof(float);
+
+			/* Move to next data entry after each vertex */
+			/* Could be move to next data entry after each instance! */
+			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+			return bindingDescription;
+		}
+
+		static std::array<VkVertexInputAttributeDescription, 1> getAttributeDescriptions() {
+			/* The second structure is a VKVertexInputAttributeDescription */
+			std::array<VkVertexInputAttributeDescription, 1> attributeDescriptions = {};
+
+			attributeDescriptions[0].binding = 0;
+			attributeDescriptions[0].location = 0;
+			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attributeDescriptions[0].offset = 0;
+
+			return attributeDescriptions;
+		}
+
+		/* Instanced material properties */
+		glm::vec4 color = glm::vec4(1.0, 0.0, 0.0, 1.0);
+		float pointSize = 4.0;
+
+		VkBuffer uniformBuffer;
+		VkDeviceMemory uniformBufferMemory;
+		VkDescriptorSet descriptorSet;
+
+		void createUniformBuffer() {
+			VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+			VKDK::CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, uniformBufferMemory);
+		}
+
+		void createDescriptorSet() {
+			VkDescriptorSetLayout layouts[] = { descriptorSetLayout };
+			VkDescriptorSetAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocInfo.descriptorPool = VKDK::descriptorPool;
+			allocInfo.descriptorSetCount = 1;
+			allocInfo.pSetLayouts = layouts;
+
+			if (vkAllocateDescriptorSets(VKDK::device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
+				throw std::runtime_error("failed to allocate descriptor set!");
+			}
+
+			VkDescriptorBufferInfo bufferInfo = {};
+			bufferInfo.buffer = uniformBuffer;
+			bufferInfo.offset = 0;
+			bufferInfo.range = sizeof(UniformBufferObject);
+
+			/*VkDescriptorImageInfo imageInfo = {};
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = textureImageView;
+			imageInfo.sampler = textureSampler;*/
+
+			std::array<VkWriteDescriptorSet, 1> descriptorWrites = {};
+
+			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[0].dstSet = descriptorSet;
+			descriptorWrites[0].dstBinding = 0;
+			descriptorWrites[0].dstArrayElement = 0;
+			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrites[0].descriptorCount = 1;
+			descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+			/*descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[1].dstSet = descriptorSet;
+			descriptorWrites[1].dstBinding = 1;
+			descriptorWrites[1].dstArrayElement = 0;
+			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrites[1].descriptorCount = 1;
+			descriptorWrites[1].pImageInfo = &imageInfo;*/
+
+			vkUpdateDescriptorSets(VKDK::device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+		}
+
 	};
 }

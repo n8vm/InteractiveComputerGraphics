@@ -36,7 +36,7 @@ namespace System {
 	/* To do: add camera here */
 
 	//extern unordered_map<string, std::shared_ptr<Texture>> TextureList;
-	extern unordered_map<std::string, std::shared_ptr<Components::Materials::Material>> MaterialList;
+	//extern unordered_map<std::string, std::shared_ptr<Components::Materials::Material>> MaterialList;
 	extern unordered_map<std::string, std::shared_ptr<Components::Mesh>> MeshList;
 
 	extern void UpdateLoop();

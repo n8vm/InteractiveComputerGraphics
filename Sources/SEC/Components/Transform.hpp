@@ -21,18 +21,19 @@ namespace Entities {
 		// Properties
 		bool hasChanged = false;
 		
-		vec3 scale = vec3();
-		vec3 position = vec3();
-		quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-		vec3 eulerAngles = vec3();
+		atomic<vec3> scale = vec3();
+		atomic<vec3> position = vec3();
+		atomic<quat> rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+		//vec3 eulerAngles = vec3();
 		
+		/* TODO: Make these constants */
 		vec3 worldRight = vec3(1.0, 0.0, 0.0);
 		vec3 worldUp = vec3(0.0, 1.0, 0.0);
 		vec3 worldForward = vec3(0.0, 0.0, 1.0);
 
-		vec3 right = vec3(1.0, 0.0, 0.0);
-		vec3 up = vec3(0.0, 1.0, 0.0);
-		vec3 forward = vec3(0.0, 0.0, 1.0);
+		atomic<vec3> right = vec3(1.0, 0.0, 0.0);
+		atomic<vec3> up = vec3(0.0, 1.0, 0.0);
+		atomic<vec3> forward = vec3(0.0, 0.0, 1.0);
 		
 
 		atomic<mat4> localToParentRotation = mat4(1);
@@ -67,14 +68,14 @@ namespace Entities {
 			
 			this->hasChanged = other.hasChanged;
 
-			this->scale = other.scale;
-			this->position = other.position;
-			this->rotation = other.rotation;
-			this->eulerAngles = other.eulerAngles;
+			this->scale.store(other.scale);
+			this->position.store(other.position);
+			this->rotation.store(other.rotation);
+			//this->eulerAngles = other.eulerAngles;
 
-			this->forward = other.forward;
-			this->right = other.right;
-			this->up = other.up;
+			this->forward.store(other.forward);
+			this->right.store(other.right);
+			this->up.store(other.up);
 
 		}
 
@@ -149,46 +150,44 @@ namespace Entities {
 			This modifies both the position and rotation of the transform.
 		*/
 		void RotateAround(vec3 point, vec3 axis, float angle) {
-			glm::vec3 direction = point - position;
+			glm::vec3 direction = point - GetPosition();
+			glm::vec3 newPosition = GetPosition() + direction;
+			glm::quat newRotation = glm::angleAxis(radians(angle), axis) * GetRotation();
+			newPosition = newPosition - direction * glm::angleAxis(radians(-angle), axis);
 
-			position += direction;
-			UpdatePosition();
-			
-			rotation = glm::angleAxis(radians(angle), axis) * rotation;
-			UpdateRotation();
-
-			position -= direction * glm::angleAxis(radians(-angle), axis);
-			UpdatePosition();
-		}
-
-		void SetRotation(quat newRotation) {
-			rotation = newRotation;
-			eulerAngles = glm::eulerAngles(rotation);
-			UpdateRotation();
-		}
-		void AddRotation(quat additionalRotation) {
-			rotation *= additionalRotation;
-			eulerAngles = glm::eulerAngles(rotation);
-			UpdateRotation();
-		}
-		void UpdateRotation() {
-			auto rotationMatrix = glm::toMat4(rotation);
-			localToParentRotation = glm::toMat4(rotation);
-			parentToLocalRotation = glm::inverse(localToParentRotation.load());
-			
-			//up = vec3(rotationMatrix * vec4(worldUp, 1.0));
-			//forward = vec3(rotationMatrix * vec4(worldForward, 1.0));
-			//right = glm::cross(up, forward);
-
+			SetRotation(newRotation);
+			SetPosition(newPosition);
 			UpdateMatrix();
 		}
 
+		quat GetRotation() {
+			return rotation.load();
+		}
+		void SetRotation(quat newRotation) {
+			rotation.store(newRotation);
+			UpdateRotation();
+		}
+		void AddRotation(quat additionalRotation) {
+			SetRotation(GetRotation() * additionalRotation);
+			//eulerAngles = glm::eulerAngles(rotation);
+			UpdateRotation();
+		}
+		void UpdateRotation() {
+			auto rotationMatrix = glm::toMat4(rotation.load());
+			localToParentRotation = glm::toMat4(rotation.load());
+			parentToLocalRotation = glm::inverse(localToParentRotation.load());
+			UpdateMatrix();
+		}
+
+		vec3 GetPosition() {
+			return position.load();
+		}
 		void SetPosition(vec3 newPosition) {
 			position = newPosition;
 			UpdatePosition();
 		}
 		void AddPosition(vec3 additionalPosition) {
-			position += additionalPosition;
+			SetPosition(GetPosition() + additionalPosition);
 			UpdatePosition();
 		}
 		void SetPosition(float x, float y, float z) {
@@ -198,17 +197,20 @@ namespace Entities {
 			AddPosition(glm::vec3(dx, dy, dz));
 		}
 		void UpdatePosition() {
-			localToParentPosition = glm::translate(glm::mat4(1.0), position);
-			parentToLocalPosition = glm::translate(glm::mat4(1.0), -position);
+			localToParentPosition = glm::translate(glm::mat4(1.0), position.load());
+			parentToLocalPosition = glm::translate(glm::mat4(1.0), -position.load());
 			UpdateMatrix();
 		}
 		
+		vec3 GetScale() {
+			return scale.load();
+		}
 		void SetScale(vec3 newScale) {
-			scale = newScale;
+			scale.store(newScale);
 			UpdateScale();
 		}
 		void AddScale(vec3 additionalScale) {
-			scale += additionalScale;
+			SetScale(GetScale() + additionalScale);
 			UpdateScale();
 		}
 		void SetScale(float x, float y, float z) {
@@ -218,20 +220,20 @@ namespace Entities {
 			AddScale(glm::vec3(dx, dy, dz));
 		}
 		void UpdateScale() {
-			localToParentScale = glm::scale(glm::mat4(1.0), scale);
-			parentToLocalScale = glm::scale(glm::mat4(1.0), glm::vec3(1.0/scale.x, 1.0 / scale.y, 1.0 / scale.z));
+			localToParentScale = glm::scale(glm::mat4(1.0), scale.load());
+			parentToLocalScale = glm::scale(glm::mat4(1.0), glm::vec3(1.0/scale.load().x, 1.0 / scale.load().y, 1.0 / scale.load().z));
 			UpdateMatrix();
 		}
 
 		void UpdateMatrix() {
 
-			localToParentMatrix = localToParentPosition.load() * localToParentRotation.load() * localToParentScale.load();
-			parentToLocalMatrix = parentToLocalScale.load() * parentToLocalRotation.load() * parentToLocalPosition.load();
+			localToParentMatrix.store(localToParentPosition.load() * localToParentRotation.load() * localToParentScale.load());
+			parentToLocalMatrix.store(parentToLocalScale.load() * parentToLocalRotation.load() * parentToLocalPosition.load());
 
-			right = glm::vec3(localToParentMatrix.load()[0]);
-			up = glm::vec3(localToParentMatrix.load()[1]);
-			forward = -glm::vec3(localToParentMatrix.load()[2]);
-			position = glm::vec3(localToParentMatrix.load()[3]);
+			right.store(glm::vec3(localToParentMatrix.load()[0]));
+			up.store(glm::vec3(localToParentMatrix.load()[1]));
+			forward.store(-glm::vec3(localToParentMatrix.load()[2]));
+			position.store(glm::vec3(localToParentMatrix.load()[3]));
 		}
 
 		glm::mat4 ParentToLocalMatrix() {

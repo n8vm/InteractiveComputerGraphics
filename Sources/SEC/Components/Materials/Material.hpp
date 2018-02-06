@@ -1,13 +1,13 @@
 #pragma once
 #include "vkdk.hpp"
-#include "Components/Mesh.hpp"
+#include "Components/Meshes/Mesh.hpp"
 
 namespace Components {
 	namespace Materials {
 		/* A material defines a render interface, and cannot be instantiated directly. */
 		class Material {
 		public:
-			virtual void render(std::shared_ptr<Components::Mesh> mesh) = 0;
+			virtual void render(std::shared_ptr<Components::Meshes::Mesh> mesh) = 0;
 			virtual void update(glm::mat4 model, glm::mat4 view, glm::mat4 projection) = 0;
 			virtual void cleanup() = 0;
 
@@ -34,3 +34,7 @@ namespace Components {
 }
 
 #include "Components/Materials/HaloMaterials/UniformColoredPoints.hpp"
+
+#include "Components/Materials/SurfaceMaterials/UniformColoredSurface.hpp"
+#include "Components/Materials/SurfaceMaterials/NormalSurface.hpp"
+#include "Components/Materials/SurfaceMaterials/BlinnSurface.hpp"

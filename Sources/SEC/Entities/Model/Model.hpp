@@ -14,7 +14,7 @@ namespace Entities {
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		
 		/* A model has a mesh component, which is used by the materials for rendering */
-		std::shared_ptr<Components::Mesh> mesh;
+		std::shared_ptr<Components::Meshes::Mesh> mesh;
 
 		/* Models use their materials to render meshes */
 		virtual void render(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
@@ -33,7 +33,7 @@ namespace Entities {
 			}
 		}
 
-		void setMesh(std::shared_ptr<Components::Mesh> mesh) {
+		void setMesh(std::shared_ptr<Components::Meshes::Mesh> mesh) {
 			this->mesh = mesh;
 		}
 

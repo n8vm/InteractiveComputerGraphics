@@ -1,13 +1,13 @@
 # SEC - System Entity Component
 include(${PROJECT_SOURCE_DIR}/CMakeGenerateHierarchy.txt)
-add_subdirectory(System)
-add_subdirectory(Entities)
 add_subdirectory(Components)
+add_subdirectory(Entities)
+add_subdirectory(System)
 
 set(SEC_SRC 
-	${System_SRC}
+	${Components_SRC}
 	${Entities_SRC}
-	${Components_SRC})
+	${System_SRC})
 
 add_library(SEC STATIC
 	${SEC_SRC})

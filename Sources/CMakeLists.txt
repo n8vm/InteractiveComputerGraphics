@@ -29,6 +29,16 @@ set(PRJ2_SRC
   ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
   PARENT_SCOPE)
 
+# PRJ3
+set(PRJ3_SRC 
+  ${SHARED_SRC}
+  ${SHARED_KRNL}
+  ${SHARED_SHDR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/Main/Prj3Main.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+  PARENT_SCOPE)
+
+
 # Kernel Source Files
 set(KERNEL_SRC ${SHARED_KRNL})
 

@@ -37,6 +37,7 @@ namespace Entities::Cameras {
 		}
 
 		void handleMouse() {
+			if (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_RIGHT_CONTROL) || glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_CONTROL)) return;
 			/* GLFW doesn't give hold info, so we have to handle it ourselves here. */
 			/* GLFW also doesn't supply delta cursor position, so we compute it. */
 
@@ -93,6 +94,7 @@ namespace Entities::Cameras {
 		}
 
 		void update() {
+
 			handleArrowKeys();
 			handleMouse();
 			handleZoom();
@@ -130,7 +132,10 @@ namespace Entities::Cameras {
 		glm::mat4 getProjection() {
 			return P;
 		}
-
+		
+		float getNear() {
+			return nearClippingPlane;
+		}
 	private: 
 		glm::vec3 initialPos;
 		glm::quat initialRot;

@@ -1,9 +1,10 @@
 #pragma once
 #include "vkdk.hpp"
+#include "Mesh.hpp"
 
-namespace Components {
-	/* A mesh component contains vertex information that has been loaded to the GPU. */
-	class Mesh {
+namespace Components::Meshes {
+	/* An obj mesh contains vertex information from an obj file that has been loaded to the GPU. */
+	class OBJMesh : public Mesh {
 	public:
 		void cleanup() {
 			/* Destroy index buffer */
@@ -13,18 +14,27 @@ namespace Components {
 			/* Destroy vertex buffer */
 			vkDestroyBuffer(VKDK::device, vertexBuffer, nullptr);
 			vkFreeMemory(VKDK::device, vertexBufferMemory, nullptr);
+
+			/* Destroy normal buffer */
+			vkDestroyBuffer(VKDK::device, normalBuffer, nullptr);
+			vkFreeMemory(VKDK::device, normalBufferMemory, nullptr);
+
+			/* Destroy uv buffer */
+			vkDestroyBuffer(VKDK::device, texCoordBuffer, nullptr);
+			vkFreeMemory(VKDK::device, texCoordBufferMemory, nullptr);
 		}
 
 		obj::Model model;
 		/* Loads a mesh from an obj file */
 		void loadFromOBJ(std::string objPath) {
 			model = obj::loadModelFromFile(objPath);
-			
 			computeCentroid();
 
 			/* TODO: Upload data to a vulkan device buffer */
 			createVertexBuffer();
 			createIndexBuffer();
+			createNormalBuffer();
+			createTexCoordBuffer();
 		}
 		VkBuffer getVertexBuffer() {
 			return vertexBuffer;
@@ -32,6 +42,14 @@ namespace Components {
 
 		VkBuffer getIndexBuffer() {
 			return indexBuffer;
+		}
+
+		VkBuffer getNormalBuffer() {
+			return normalBuffer;
+		}
+
+		VkBuffer getTexCoordBuffer() {
+			return texCoordBuffer;
 		}
 
 		uint32_t getTotalIndices() {
@@ -63,6 +81,12 @@ namespace Components {
 
 		VkBuffer indexBuffer;
 		VkDeviceMemory indexBufferMemory;
+
+		VkBuffer normalBuffer;
+		VkDeviceMemory normalBufferMemory;
+
+		VkBuffer texCoordBuffer;
+		VkDeviceMemory texCoordBufferMemory;
 
 		void createVertexBuffer() {
 			VkDeviceSize bufferSize = model.vertex.size() * sizeof(float);
@@ -103,5 +127,51 @@ namespace Components {
 			vkDestroyBuffer(VKDK::device, stagingBuffer, nullptr);
 			vkFreeMemory(VKDK::device, stagingBufferMemory, nullptr);
 		}
+
+		void createNormalBuffer() {
+			VkDeviceSize bufferSize = model.normal.size() * sizeof(float);
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingBufferMemory;
+			VKDK::CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			/* Map the memory to a pointer on the host */
+			void* data;
+			vkMapMemory(VKDK::device, stagingBufferMemory, 0, bufferSize, 0, &data);
+
+			/* Copy over our normal data, then unmap */
+			memcpy(data, model.normal.data(), (size_t)bufferSize);
+			vkUnmapMemory(VKDK::device, stagingBufferMemory);
+
+			VKDK::CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, normalBuffer, normalBufferMemory);
+			VKDK::CopyBuffer(stagingBuffer, normalBuffer, bufferSize);
+
+			/* Clean up the staging buffer */
+			vkDestroyBuffer(VKDK::device, stagingBuffer, nullptr);
+			vkFreeMemory(VKDK::device, stagingBufferMemory, nullptr);
+		}
+
+		void createTexCoordBuffer() {
+			VkDeviceSize bufferSize = model.texCoord.size() * sizeof(float);
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingBufferMemory;
+			VKDK::CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			/* Map the memory to a pointer on the host */
+			void* data;
+			vkMapMemory(VKDK::device, stagingBufferMemory, 0, bufferSize, 0, &data);
+
+			/* Copy over our normal data, then unmap */
+			memcpy(data, model.texCoord.data(), (size_t)bufferSize);
+			vkUnmapMemory(VKDK::device, stagingBufferMemory);
+
+			VKDK::CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texCoordBuffer, texCoordBufferMemory);
+			VKDK::CopyBuffer(stagingBuffer, texCoordBuffer, bufferSize);
+
+			/* Clean up the staging buffer */
+			vkDestroyBuffer(VKDK::device, stagingBuffer, nullptr);
+			vkFreeMemory(VKDK::device, stagingBufferMemory, nullptr);
+		}
+
 	};
 }
+

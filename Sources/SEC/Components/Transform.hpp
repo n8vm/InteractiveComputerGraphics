@@ -1,4 +1,13 @@
 #pragma once
+
+#ifndef GLM_ENABLE_EXPERIMENTAL
+#define GLM_ENABLE_EXPERIMENTAL
+#endif 
+
+#ifndef GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#endif
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/common.hpp>
@@ -8,7 +17,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 
-namespace Entities {
+namespace Components {
 	using namespace glm;
 	enum Space {
 		Local,
@@ -155,8 +164,14 @@ namespace Entities {
 			glm::quat newRotation = glm::angleAxis(radians(angle), axis) * GetRotation();
 			newPosition = newPosition - direction * glm::angleAxis(radians(-angle), axis);
 
-			SetRotation(newRotation);
-			SetPosition(newPosition);
+			rotation.store(newRotation);
+			localToParentRotation = glm::toMat4(rotation.load());
+			parentToLocalRotation = glm::inverse(localToParentRotation.load());
+
+			position = newPosition;
+			localToParentPosition = glm::translate(glm::mat4(1.0), position.load());
+			parentToLocalPosition = glm::translate(glm::mat4(1.0), -position.load());
+			
 			UpdateMatrix();
 		}
 
@@ -167,13 +182,14 @@ namespace Entities {
 			rotation.store(newRotation);
 			UpdateRotation();
 		}
+		void SetRotation(float angle, vec3 axis) {
+			SetRotation(glm::angleAxis(angle, axis));
+		}
 		void AddRotation(quat additionalRotation) {
 			SetRotation(GetRotation() * additionalRotation);
-			//eulerAngles = glm::eulerAngles(rotation);
 			UpdateRotation();
 		}
 		void UpdateRotation() {
-			auto rotationMatrix = glm::toMat4(rotation.load());
 			localToParentRotation = glm::toMat4(rotation.load());
 			parentToLocalRotation = glm::inverse(localToParentRotation.load());
 			UpdateMatrix();

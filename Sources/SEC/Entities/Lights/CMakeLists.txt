@@ -1,0 +1,4 @@
+set (Lights_SRC
+	${CMAKE_CURRENT_SOURCE_DIR}/Light.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/PointLight.hpp
+	PARENT_SCOPE) 

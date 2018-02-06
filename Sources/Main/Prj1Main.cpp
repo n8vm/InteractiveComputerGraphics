@@ -52,7 +52,7 @@ void System::Start() {
 	System::RenderLoop();
 }
 
-void System::Terminate() {
+void System::Cleanup() {
 	/* Quit */
 	System::quit = true;
 
@@ -62,11 +62,12 @@ void System::Terminate() {
 }
 
 int main() {
-		VKDK::InitializationParameters vkdkParams = { 512, 512, "Project 1 - Hello World", false, false, true };
+		VKDK::InitializationParameters vkdkParams = { 1024, 1024, "Project 1 - Hello World", false, false, true };
 		if (VKDK::Initialize(vkdkParams) != VK_SUCCESS) System::quit = true;
 
 		System::Start();
 		System::Terminate();
+		System::Cleanup();
 
 		VKDK::Terminate();	
 }

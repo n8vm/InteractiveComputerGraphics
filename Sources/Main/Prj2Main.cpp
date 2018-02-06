@@ -13,6 +13,7 @@ void System::UpdateLoop() {
 	while (quit == false) {
 		auto currentTime = glfwGetTime();
 		if (currentTime - lastTime > 1.0 / UpdateRate) {
+			System::UpdateCameraBuffer();
 			World.update();
 			lastTime = currentTime;
 		}
@@ -66,7 +67,7 @@ void System::SetupComponents() {
 	Materials::HaloMaterials::UniformColoredPoints::Initialize(3);
 	
 	/* Load the model (by default, a teapot) */
-	shared_ptr<Mesh> mesh = make_shared<Mesh>();
+	shared_ptr<Meshes::OBJMesh> mesh = make_shared<Meshes::OBJMesh>();
 	mesh->loadFromOBJ(Options::objLocation);
 	MeshList.emplace("mesh", mesh);
 }
@@ -91,12 +92,15 @@ void System::SetupEntities() {
 	/* Create a material for that mesh */
 	auto redPoints = make_shared<HaloMaterials::UniformColoredPoints>();
 	redPoints->setColor(1.0, 0.0, 0.0, 1.0);
+	redPoints->setPointSize(1.0);
 
 	auto greenPoints = make_shared<HaloMaterials::UniformColoredPoints>();
 	greenPoints->setColor(0.0, 1.0, 0.0, 1.0);
-
+	greenPoints->setPointSize(1.0);
+	
 	auto bluePoints = make_shared<HaloMaterials::UniformColoredPoints>();
 	bluePoints->setColor(0.0, 0.0, 1.0, 1.0);	
+	bluePoints->setPointSize(1.0);
 
 	/* Create an entity with the provided mesh and model */
 	std::shared_ptr<Entities::Model> redTeapot = make_shared<Model>();
@@ -127,7 +131,7 @@ void System::SetupEntities() {
 	centriod *= .1;
 
 	/* Create an orbit camera to look at the model */
-	auto camera = make_shared<Cameras::OrbitCamera>(glm::vec3(0.0, -5.0, 5.0), centriod);
+	System::camera = make_shared<Cameras::OrbitCamera>(glm::vec3(0.0, -5.0, 5.0), centriod);
 	World.addObject("camera", camera);
 }
 
@@ -141,7 +145,7 @@ void System::Start() {
 	System::RenderLoop();
 }
 
-void System::Terminate() {
+void System::Cleanup() {
 	/* Quit */
 	System::quit = true;
 
@@ -159,15 +163,18 @@ int main(int argc, char** argv) {
 	Options::ProcessArgs(argc, argv);
 
 	/* Initialize Vulkan */
-	VKDK::InitializationParameters vkdkParams = { 512, 512, "Project 2 - Transformations", false, false, true };
+	VKDK::InitializationParameters vkdkParams = { 1024, 1024, "Project 2 - Transformations", false, false, true };
 	if (VKDK::Initialize(vkdkParams) != VK_SUCCESS) System::quit = true;
+
+	System::Initialize();
 
 	/* Setup System Entity Component */
 	System::SetupComponents();
 	System::SetupEntities();
 	System::Start();
+	System::Cleanup();
 
-	/* Cleanup */
+	/* Terminate */
 	System::Terminate();
 	VKDK::Terminate();	
 }

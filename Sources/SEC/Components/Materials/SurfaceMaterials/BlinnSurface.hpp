@@ -7,11 +7,11 @@
 #include <array>
 
 
-namespace Components::Materials::HaloMaterials {
-	class UniformColoredPoints : public Material {
+namespace Components::Materials::SurfaceMaterials {
+	class BlinnSurface : public Material {
 	public:
 		static void Initialize(int maxDescriptorSets) {
-			UniformColoredPoints::maxDescriptorSets = maxDescriptorSets;
+			BlinnSurface::maxDescriptorSets = maxDescriptorSets;
 			createDescriptorSetLayout();
 			createDescriptorPool();
 			setupGraphicsPipeline();
@@ -31,25 +31,9 @@ namespace Components::Materials::HaloMaterials {
 			vkDestroyPipeline(VKDK::device, graphicsPipeline, nullptr);
 			setupGraphicsPipeline();
 		}
-		
+
 		/* Note: one material instance per entity! Cleanup before destroying VKDK stuff */
-		UniformColoredPoints() : Material() {
-			/* Should I create a descriptor set here? If so, how many do I create?
-			
-				If only one object will be using this material, then I could create one descriptor set. 
-				However, if multiple objects intend to use the same material, then I might need multiple descriptor sets...
-
-				Thinking, maybe materials should be static, since the "state" of the material depends heavily on descriptor set...
-				
-				So, render would become a static method, which uses an initialized graphics pipeline and provided VBO, IBO, Descriptor data
-
-				How does that effect the concept of "adding" a material to an entity? 
-
-				Would be nice to wrap descriptor set info for different materials
-
-				Maybe instances of this material could coorespond to descriptor sets, and static stuff creates descriptor pools, graphics pipeline, etc
-			*/
-
+		BlinnSurface() : Material() {
 			createUniformBuffer();
 			createDescriptorSet();
 		}
@@ -60,14 +44,16 @@ namespace Components::Materials::HaloMaterials {
 			vkDestroyBuffer(VKDK::device, uniformBuffer, nullptr);
 			vkFreeMemory(VKDK::device, uniformBufferMemory, nullptr);
 		}
-		
+
 		/* TODO: use seperate descriptor set for model view projection, update only once per update tick */
 		void update(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
 			/* Update uniform buffer */
 			UniformBufferObject ubo = {};
-			ubo.model = model;
-			ubo.pointSize = pointSize;
-			ubo.color = color;
+			ubo.modelMatrix = model;
+			ubo.normalMatrix = transpose(inverse(view * model));
+			ubo.ka = ka;
+			ubo.kd = kd;
+			ubo.ks = ks;
 
 			/* Map uniform buffer, copy data directly, then unmap */
 			void* data;
@@ -82,13 +68,14 @@ namespace Components::Materials::HaloMaterials {
 
 			/* Get mesh data */
 			VkBuffer vertexBuffer = mesh->getVertexBuffer();
+			VkBuffer normalBuffer = mesh->getNormalBuffer();
 			VkBuffer indexBuffer = mesh->getIndexBuffer();
 			uint32_t totalIndices = mesh->getTotalIndices();
 
-			VkBuffer vertexBuffers[] = { vertexBuffer };
-			VkDeviceSize offsets[] = { 0 };
+			VkBuffer vertexBuffers[] = { vertexBuffer, normalBuffer };
+			VkDeviceSize offsets[] = { 0 , 0 };
 
-			vkCmdBindVertexBuffers(VKDK::commandBuffers[System::currentImageIndex], 0, 1, vertexBuffers, offsets);
+			vkCmdBindVertexBuffers(VKDK::commandBuffers[System::currentImageIndex], 0, 2, vertexBuffers, offsets);
 			vkCmdBindIndexBuffer(VKDK::commandBuffers[System::currentImageIndex], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 			vkCmdBindDescriptorSets(VKDK::commandBuffers[System::currentImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
@@ -96,12 +83,10 @@ namespace Components::Materials::HaloMaterials {
 			vkCmdDrawIndexed(VKDK::commandBuffers[System::currentImageIndex], totalIndices, 1, 0, 0, 0);
 		}
 
-		void setColor(float r, float g, float b, float a) {
-			color = glm::vec4(r, g, b, a);
-		}
-
-		void setPointSize(float size) {
-			pointSize = size;
+		void setColor(glm::vec4 ka, glm::vec4 kd, glm::vec4 ks) {
+			this->ka = ka;
+			this->kd = kd;
+			this->ks = ks;
 		}
 
 	private:
@@ -117,44 +102,59 @@ namespace Components::Materials::HaloMaterials {
 		static uint32_t maxDescriptorSets;
 
 		struct UniformBufferObject {
-			glm::mat4 model;
-			glm::vec4 color;
-			float pointSize;
+			glm::mat4 modelMatrix;
+			glm::mat4 normalMatrix;
+			glm::vec4 ka;
+			glm::vec4 kd;
+			glm::vec4 ks;
 		};
 
 		/* A descriptor set layout describes how uniforms are used in the pipeline */
 		static void createDescriptorSetLayout() {
-			VkDescriptorSetLayoutBinding cboLayoutBinding = {};
-			cboLayoutBinding.binding = 0;
-			cboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			cboLayoutBinding.descriptorCount = 1;
-			cboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-			cboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+			std::array<VkDescriptorSetLayoutBinding, 3> bindings = {};
+			
+			/* Camera buffer object */
+			bindings[0].binding = 0;
+			bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			bindings[0].descriptorCount = 1;
+			bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT; /* Might need to change this */
+			bindings[0].pImmutableSamplers = nullptr; // Optional
 
-			VkDescriptorSetLayoutBinding uboLayoutBinding = {};
-			uboLayoutBinding.binding = 1;
-			uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			uboLayoutBinding.descriptorCount = 1;
-			uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-			uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+			/* Uniform buffer object */
+			bindings[1].binding = 1;
+			bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			bindings[1].descriptorCount = 1;
+			bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+			bindings[1].pImmutableSamplers = nullptr; // Optional
 
-			std::array<VkDescriptorSetLayoutBinding, 2> bindings = {cboLayoutBinding, uboLayoutBinding };
+			/* Light buffer object */
+			bindings[2].binding = 2;
+			bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			bindings[2].descriptorCount = 1;
+			bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; /* Might need to change this */
+			bindings[2].pImmutableSamplers = nullptr; // Optional
+
 			VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 			layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 			layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 			layoutInfo.pBindings = bindings.data();
 
 			if (vkCreateDescriptorSetLayout(VKDK::device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create UniformColoredPoints descriptor set layout!");
+				throw std::runtime_error("failed to create BlinnSurface descriptor set layout!");
 			}
 		}
 
 		static void createDescriptorPool() {
-			std::array<VkDescriptorPoolSize, 2> poolSizes = {};
+			std::array<VkDescriptorPoolSize, 3> poolSizes = {};
+			/* Camera Buffer */
 			poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			poolSizes[0].descriptorCount = maxDescriptorSets;
+			/* Uniform Buffer */
 			poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			poolSizes[1].descriptorCount = maxDescriptorSets;
+			/* Light Buffer */
+			poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			poolSizes[2].descriptorCount = maxDescriptorSets;
 
 			VkDescriptorPoolCreateInfo poolInfo = {};
 			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -170,8 +170,8 @@ namespace Components::Materials::HaloMaterials {
 
 		static void setupGraphicsPipeline() {
 			/* Read in shader modules */
-			auto vertShaderCode = readFile(ResourcePath "MaterialShaders/HaloMaterials/UniformColoredPoints/vert.spv");
-			auto fragShaderCode = readFile(ResourcePath "MaterialShaders/HaloMaterials/UniformColoredPoints/frag.spv");
+			auto vertShaderCode = readFile(ResourcePath "MaterialShaders/SurfaceMaterials/BlinnSurface/vert.spv");
+			auto fragShaderCode = readFile(ResourcePath "MaterialShaders/SurfaceMaterials/BlinnSurface/frag.spv");
 
 			/* Create shader modules */
 			vertShaderModule = createShaderModule(vertShaderCode);
@@ -203,18 +203,20 @@ namespace Components::Materials::HaloMaterials {
 			//vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
 
 			/* ADDED AFTER VB CHAPTER */
-			auto bindingDescription = getBindingDescription();
+			auto bindingDescriptions = getBindingDescription();
 			auto attributeDescriptions = getAttributeDescriptions();
 
-			vertexInputInfo.vertexBindingDescriptionCount = 1;
-			vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-			vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+			vertexInputInfo.vertexBindingDescriptionCount = bindingDescriptions.size();
+			vertexInputInfo.vertexAttributeDescriptionCount = attributeDescriptions.size();
+			vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
 			vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+
 
 			/* Input Assembly */
 			VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 			inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 			inputAssembly.primitiveRestartEnable = VK_FALSE;
 
 			/* Viewports and Scissors */
@@ -362,34 +364,50 @@ namespace Components::Materials::HaloMaterials {
 			return shaderModule;
 		}
 
-		static VkVertexInputBindingDescription getBindingDescription() {
+		static std::array<VkVertexInputBindingDescription, 2> getBindingDescription() {
+			std::array<VkVertexInputBindingDescription, 2> bindingDescriptions;
+
 			/* The first structure is VKVertexInputBindingDescription */
-			VkVertexInputBindingDescription bindingDescription = {};
-			bindingDescription.binding = 0;
-			bindingDescription.stride = 3 * sizeof(float);
+			VkVertexInputBindingDescription vertexBindingDescription = {};
+			vertexBindingDescription.binding = 0;
+			vertexBindingDescription.stride = 3 * sizeof(float);
+			vertexBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+			VkVertexInputBindingDescription normalBindingDescription = {};
+			normalBindingDescription.binding = 1;
+			normalBindingDescription.stride = 3 * sizeof(float);
+			normalBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+			bindingDescriptions[0] = vertexBindingDescription;
+			bindingDescriptions[1] = normalBindingDescription;
 
 			/* Move to next data entry after each vertex */
 			/* Could be move to next data entry after each instance! */
-			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-			return bindingDescription;
+			return bindingDescriptions;
 		}
 
-		static std::array<VkVertexInputAttributeDescription, 1> getAttributeDescriptions() {
-			/* The second structure is a VKVertexInputAttributeDescription */
-			std::array<VkVertexInputAttributeDescription, 1> attributeDescriptions = {};
-
+		static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+			std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
+			/* Vertex input */
 			attributeDescriptions[0].binding = 0;
 			attributeDescriptions[0].location = 0;
 			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 			attributeDescriptions[0].offset = 0;
 
+			/* Normal input */
+			attributeDescriptions[1].binding = 1;
+			attributeDescriptions[1].location = 1;
+			attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attributeDescriptions[1].offset = 0;
+
 			return attributeDescriptions;
 		}
 
 		/* Instanced material properties */
-		glm::vec4 color = glm::vec4(1.0, 0.0, 0.0, 1.0);
-		float pointSize = 4.0;
+		glm::vec4 ka = glm::vec4(0.5, 0.5, 0.5, 1.0);
+		glm::vec4 kd = glm::vec4(0.5, 0.5, 0.5, 1.0);
+		glm::vec4 ks = glm::vec4(0.5, 0.5, 0.5, 1.0);
 
 		VkBuffer uniformBuffer;
 		VkDeviceMemory uniformBufferMemory;
@@ -411,23 +429,32 @@ namespace Components::Materials::HaloMaterials {
 			if (vkAllocateDescriptorSets(VKDK::device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
 				throw std::runtime_error("failed to allocate descriptor set!");
 			}
+						
+			/* Camera buffer */
+			VkDescriptorBufferInfo cameraDescriptorBufferInfo = {};
+			cameraDescriptorBufferInfo.buffer = System::GetCameraBuffer();
+			cameraDescriptorBufferInfo.offset = 0;
+			cameraDescriptorBufferInfo.range = sizeof(Entities::Cameras::CameraBufferObject);
 
-			VkDescriptorBufferInfo cameraBufferInfo = {};
-			cameraBufferInfo.buffer = System::GetCameraBuffer();
-			cameraBufferInfo.offset = 0;
-			cameraBufferInfo.range = sizeof(Entities::Cameras::CameraBufferObject);
+			/* Uniform buffer */
+			VkDescriptorBufferInfo uniformDescriptorBufferInfo = {};
+			uniformDescriptorBufferInfo.buffer = uniformBuffer;
+			uniformDescriptorBufferInfo.offset = 0;
+			uniformDescriptorBufferInfo.range = sizeof(UniformBufferObject);
 
-			VkDescriptorBufferInfo uniformBufferInfo = {};
-			uniformBufferInfo.buffer = uniformBuffer;
-			uniformBufferInfo.offset = 0;
-			uniformBufferInfo.range = sizeof(UniformBufferObject);
+			/* Light buffer */
+			VkDescriptorBufferInfo lightDescriptorBufferInfo = {};
+			lightDescriptorBufferInfo.buffer = System::GetLightBuffer();
+			lightDescriptorBufferInfo.offset = 0;
+			lightDescriptorBufferInfo.range = sizeof(Entities::Lights::LightBufferObject);
+
 
 			/*VkDescriptorImageInfo imageInfo = {};
 			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			imageInfo.imageView = textureImageView;
 			imageInfo.sampler = textureSampler;*/
 
-			std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
+			std::array<VkWriteDescriptorSet, 3> descriptorWrites = {};
 
 			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			descriptorWrites[0].dstSet = descriptorSet;
@@ -435,7 +462,7 @@ namespace Components::Materials::HaloMaterials {
 			descriptorWrites[0].dstArrayElement = 0;
 			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			descriptorWrites[0].descriptorCount = 1;
-			descriptorWrites[0].pBufferInfo = &cameraBufferInfo;
+			descriptorWrites[0].pBufferInfo = &cameraDescriptorBufferInfo;
 
 			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			descriptorWrites[1].dstSet = descriptorSet;
@@ -443,15 +470,15 @@ namespace Components::Materials::HaloMaterials {
 			descriptorWrites[1].dstArrayElement = 0;
 			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].pBufferInfo = &uniformBufferInfo;
+			descriptorWrites[1].pBufferInfo = &uniformDescriptorBufferInfo;
 
-			/*descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[1].dstSet = descriptorSet;
-			descriptorWrites[1].dstBinding = 1;
-			descriptorWrites[1].dstArrayElement = 0;
-			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].pImageInfo = &imageInfo;*/
+			descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[2].dstSet = descriptorSet;
+			descriptorWrites[2].dstBinding = 2;
+			descriptorWrites[2].dstArrayElement = 0;
+			descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrites[2].descriptorCount = 1;
+			descriptorWrites[2].pBufferInfo = &lightDescriptorBufferInfo;
 
 			vkUpdateDescriptorSets(VKDK::device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		}

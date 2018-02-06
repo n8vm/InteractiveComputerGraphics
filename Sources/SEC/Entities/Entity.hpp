@@ -5,18 +5,10 @@
 
 #pragma once
 
-#ifndef GLM_ENABLE_EXPERIMENTAL
-#define GLM_ENABLE_EXPERIMENTAL
-#endif 
-
-#ifndef GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#endif
-
 #include <vector>
 #include <unordered_map>
 #include <memory>
-
+#include <string>
 #include "Components/Transform.hpp"
 
 namespace Entities {
@@ -28,7 +20,7 @@ namespace Entities {
 	class Entity {
 	public:
 		/* An Entity has a transform component, which moves the entity around */
-		Transform transform = Transform();
+		Components::Transform transform = Components::Transform();
 
 		/* An Entity can have a list of child objects. By default, these objects are transformed 
 		relative to this entity. */
@@ -94,11 +86,11 @@ namespace Entities {
 			}
 		}
 		
-		void addObject(const string key, shared_ptr<Entity> object) {
+		void addObject(const std::string key, std::shared_ptr<Entity> object) {
 			children[key] = object;
 		}
 
-		void removeObject(const string key) {
+		void removeObject(const std::string key) {
 			children.erase(key);
 		}
 	};

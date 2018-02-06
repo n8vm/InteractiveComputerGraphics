@@ -7,11 +7,11 @@
 #include <array>
 
 
-namespace Components::Materials::HaloMaterials {
-	class UniformColoredPoints : public Material {
+namespace Components::Materials::SurfaceMaterials {
+	class UniformColoredSurface : public Material {
 	public:
 		static void Initialize(int maxDescriptorSets) {
-			UniformColoredPoints::maxDescriptorSets = maxDescriptorSets;
+			UniformColoredSurface::maxDescriptorSets = maxDescriptorSets;
 			createDescriptorSetLayout();
 			createDescriptorPool();
 			setupGraphicsPipeline();
@@ -31,23 +31,23 @@ namespace Components::Materials::HaloMaterials {
 			vkDestroyPipeline(VKDK::device, graphicsPipeline, nullptr);
 			setupGraphicsPipeline();
 		}
-		
+
 		/* Note: one material instance per entity! Cleanup before destroying VKDK stuff */
-		UniformColoredPoints() : Material() {
+		UniformColoredSurface() : Material() {
 			/* Should I create a descriptor set here? If so, how many do I create?
-			
-				If only one object will be using this material, then I could create one descriptor set. 
-				However, if multiple objects intend to use the same material, then I might need multiple descriptor sets...
 
-				Thinking, maybe materials should be static, since the "state" of the material depends heavily on descriptor set...
-				
-				So, render would become a static method, which uses an initialized graphics pipeline and provided VBO, IBO, Descriptor data
+			If only one object will be using this material, then I could create one descriptor set.
+			However, if multiple objects intend to use the same material, then I might need multiple descriptor sets...
 
-				How does that effect the concept of "adding" a material to an entity? 
+			Thinking, maybe materials should be static, since the "state" of the material depends heavily on descriptor set...
 
-				Would be nice to wrap descriptor set info for different materials
+			So, render would become a static method, which uses an initialized graphics pipeline and provided VBO, IBO, Descriptor data
 
-				Maybe instances of this material could coorespond to descriptor sets, and static stuff creates descriptor pools, graphics pipeline, etc
+			How does that effect the concept of "adding" a material to an entity?
+
+			Would be nice to wrap descriptor set info for different materials
+
+			Maybe instances of this material could coorespond to descriptor sets, and static stuff creates descriptor pools, graphics pipeline, etc
 			*/
 
 			createUniformBuffer();
@@ -60,7 +60,7 @@ namespace Components::Materials::HaloMaterials {
 			vkDestroyBuffer(VKDK::device, uniformBuffer, nullptr);
 			vkFreeMemory(VKDK::device, uniformBufferMemory, nullptr);
 		}
-		
+
 		/* TODO: use seperate descriptor set for model view projection, update only once per update tick */
 		void update(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
 			/* Update uniform buffer */
@@ -98,6 +98,10 @@ namespace Components::Materials::HaloMaterials {
 
 		void setColor(float r, float g, float b, float a) {
 			color = glm::vec4(r, g, b, a);
+		}
+
+		void setColor(glm::vec4 color) {
+			this->color = color;
 		}
 
 		void setPointSize(float size) {
@@ -138,7 +142,7 @@ namespace Components::Materials::HaloMaterials {
 			uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 			uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
-			std::array<VkDescriptorSetLayoutBinding, 2> bindings = {cboLayoutBinding, uboLayoutBinding };
+			std::array<VkDescriptorSetLayoutBinding, 2> bindings = { cboLayoutBinding, uboLayoutBinding };
 			VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 			layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 			layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -170,8 +174,8 @@ namespace Components::Materials::HaloMaterials {
 
 		static void setupGraphicsPipeline() {
 			/* Read in shader modules */
-			auto vertShaderCode = readFile(ResourcePath "MaterialShaders/HaloMaterials/UniformColoredPoints/vert.spv");
-			auto fragShaderCode = readFile(ResourcePath "MaterialShaders/HaloMaterials/UniformColoredPoints/frag.spv");
+			auto vertShaderCode = readFile(ResourcePath "MaterialShaders/SurfaceMaterials/UniformColoredSurface/vert.spv");
+			auto fragShaderCode = readFile(ResourcePath "MaterialShaders/SurfaceMaterials/UniformColoredSurface/frag.spv");
 
 			/* Create shader modules */
 			vertShaderModule = createShaderModule(vertShaderCode);
@@ -214,7 +218,7 @@ namespace Components::Materials::HaloMaterials {
 			/* Input Assembly */
 			VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 			inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 			inputAssembly.primitiveRestartEnable = VK_FALSE;
 
 			/* Viewports and Scissors */
@@ -444,14 +448,6 @@ namespace Components::Materials::HaloMaterials {
 			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			descriptorWrites[1].descriptorCount = 1;
 			descriptorWrites[1].pBufferInfo = &uniformBufferInfo;
-
-			/*descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[1].dstSet = descriptorSet;
-			descriptorWrites[1].dstBinding = 1;
-			descriptorWrites[1].dstArrayElement = 0;
-			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].pImageInfo = &imageInfo;*/
 
 			vkUpdateDescriptorSets(VKDK::device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		}

@@ -82,8 +82,8 @@ namespace VKDK {
 	extern VkFormat swapChainImageFormat;
 	extern VkExtent2D swapChainExtent;
 	extern std::vector<VkImageView> swapChainImageViews;
-	extern VkPipelineLayout pipelineLayout;
-	extern VkPipeline graphicsPipeline;
+	//extern VkPipelineLayout pipelineLayout;
+	//extern VkPipeline graphicsPipeline;
 	extern VkRenderPass renderPass;
 	extern std::vector<VkFramebuffer> swapChainFramebuffers;
 	extern VkCommandPool commandPool;
@@ -91,7 +91,6 @@ namespace VKDK {
 	extern VkSemaphore imageAvailableSemaphore;
 	extern VkSemaphore renderFinishedSemaphore;
 	extern VkDebugReportCallbackEXT callback;
-	extern VkDescriptorPool descriptorPool;
 
 
 	/* ------------------------------------------*/
@@ -143,7 +142,7 @@ namespace VKDK {
 	extern void CreateRenderPass();
 
 	/* Create Descriptor Set */
-	extern void CreateDescriptorSetLayout();
+	//extern void CreateDescriptorSetLayout();
 
 	/* Create Graphics Pipeline */
 	extern void CreateGraphicsPipeline();
@@ -177,10 +176,10 @@ namespace VKDK {
 	extern void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
 	/* Create Descriptor Pool */
-	extern void CreateDescriptorPool();
+	//extern void CreateDescriptorPool();
 
 	/* Create Descriptor Set */
-	extern void CreateDescriptorSet();
+	//extern void CreateDescriptorSet();
 
 	/* Create Command Buffers */
 	extern void CreateCommandBuffers();

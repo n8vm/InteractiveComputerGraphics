@@ -14,8 +14,6 @@ set(SRC_PATH "Sources")
 #------------------------------------------------------------
 # Use C++ 17
 #------------------------------------------------------------
-# include(CheckCXXCompilerFlag)
-# CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -66,6 +64,10 @@ generate_folder_hierarchy("${PRJ1_SRC}")
 add_executable (PRJ2-Transformations "${PRJ2_SRC}")
 target_link_libraries (PRJ2-Transformations ${LIBRARIES} VKDK SEC)
 generate_folder_hierarchy("${PRJ2_SRC}")
+
+add_executable (PRJ3-Shading "${PRJ3_SRC}")
+target_link_libraries (PRJ3-Shading ${LIBRARIES} VKDK SEC)
+generate_folder_hierarchy("${PRJ3_SRC}")
 
 #------------------------------------------------------------
 # INSTALL TARGETS

@@ -22,22 +22,27 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
-
+#include <atomic>
 #define NUM_DESCRIPTOR_SETS 10
+
+#define NOMINMAX
+#include "VulkanTools.hpp"
+
 
 namespace VKDK {
 	/* ------------------------------------------*/
 	/* STRUCTS                                   */
 	/* ------------------------------------------*/
 
-	/* i_Width, i_Height, -s_title, b_fullscreen, b_WindowHidden*/
+	/* i_Width, i_Height, -s_title, b_fullscreen, b_WindowHidden, b_verbose, b_vsync_enabled */
 	struct InitializationParameters {
-		int windowWidth;
-		int windowHeight;
-		std::string windowTitle;
-		bool fullScreenActive;
-		bool windowHidden;
-		bool verbose;
+		int initialWindowWidth = 512;
+		int initialWindowHeight = 512;
+		std::string windowTitle = "Default Window Title";
+		bool fullScreenActive = false;
+		bool windowHidden = false;
+		bool verbose = false;
+		bool vsyncEnabled = false;
 	};
 	
 	struct QueueFamilyIndices {
@@ -56,53 +61,130 @@ namespace VKDK {
 	};
 
 	/* ------------------------------------------*/
-	/* FIELDS                                    */
+	/* GLFW FIELDS                               */
 	/* ------------------------------------------*/
-	extern bool Verbose;
+
+	/* Keeps track of settings like vsync, default window size, window title, etc */
+	extern InitializationParameters currentSettings;
+
+	/* Handle to the glfw window, which can be used for event queries */
 	extern GLFWwindow *DefaultWindow;
+
+	/* Opaque monitor object */
 	extern GLFWmonitor *DefaultMonitor;
-	extern bool FullScreenActive;
-	extern bool WindowHidden;
-	extern int DefaultWindowSize[2];
-	extern int DefaultWindowPos[2];
-	extern int PreviousWindowSize[2];
-	extern int PreviousWindowPos[2];
-	extern std::string DefaultWindowTitle;
+
+	extern uint32_t CurrentWindowSize[2];
+	extern uint32_t CurrentWindowPos[2];
+	extern uint32_t PreviousWindowSize[2];
+	extern uint32_t PreviousWindowPos[2];
+
+	/* ------------------------------------------*/
+	/* VULKAN FIELDS                             */
+	/* ------------------------------------------*/
+
+	/* Handle to the current vulkan context */
 	extern VkInstance instance;
+
+	/* A vector to the validation layers to enable */
 	extern const std::vector<const char*> validationLayers;
+
+	/* Disable/Enable validation layers. False by default on release, true by default on debug.  */
 	extern const bool enableValidationLayers;
-	extern VkPhysicalDevice physicalDevice;
-	extern VkDevice device;
-	extern VkQueue graphicsQueue;
-	extern VkQueue presentQueue;
-	extern VkSurfaceKHR surface;
-	extern const std::vector<const char*> deviceExtensions;
-	extern VkSwapchainKHR swapChain;
-	extern std::vector<VkImage> swapChainImages;
-	extern VkFormat swapChainImageFormat;
-	extern VkExtent2D swapChainExtent;
-	extern std::vector<VkImageView> swapChainImageViews;
-	//extern VkPipelineLayout pipelineLayout;
-	//extern VkPipeline graphicsPipeline;
-	extern VkRenderPass renderPass;
-	extern std::vector<VkFramebuffer> swapChainFramebuffers;
-	extern VkCommandPool commandPool;
-	extern std::vector<VkCommandBuffer> commandBuffers;
-	extern VkSemaphore imageAvailableSemaphore;
-	extern VkSemaphore renderFinishedSemaphore;
+
+	/* Function called when validation layers "validate" */
 	extern VkDebugReportCallbackEXT callback;
 
+	/* Logical device, application's view of the physical device (GPU) */
+	extern VkDevice device;
+
+	/* Physical device, handle used to create logical device */
+	extern VkPhysicalDevice physicalDevice;
+
+	/* Properties of the physical device including limits that the application can check against */
+	extern VkPhysicalDeviceProperties deviceProperties;
+
+	/* Features of the physical device that an application can use to check if a feature is supported */
+	extern VkPhysicalDeviceFeatures deviceFeatures;
+
+	/* A vector to the requested extensions for the logical device */
+	extern const std::vector<const char*> deviceExtensions;
+	
+	/* Handle to the device graphics queue that command buffers are submitted to */
+	extern VkQueue graphicsQueue;
+
+	/* Handle to the device present queue that command buffers are submitted to */
+	extern VkQueue presentQueue;
+
+	/* Command buffer pool */
+	extern VkCommandPool commandPool;
+
+	/* Pipeline stages used to wait at for graphics queue submissions */
+	extern VkPipelineStageFlags submitPipelineStages;
+
+	/* Contains command buffers and semaphores to be presented to the queue */
+	extern VkSubmitInfo submitInfo;
+
+	/* Command buffers used for final rendering pass */
+	extern std::vector<VkCommandBuffer> drawCmdBuffers;
+
+	/* Global render pass for frame buffer writes */
+	extern VkRenderPass renderPass;
+
+	/* List of available frame buffers (same as number of swap chain images) */
+	extern std::vector<VkFramebuffer> swapChainFramebuffers;
+
+	/* Active frame buffer index */
+	extern uint32_t swapIndex;
+
+	/* Pipeline cache object (TODO: figure out how to implement this )*/
+	// VkPipelineCache pipelineCache
+
+	/* Wraps the swap chain to present images (framebuffers) to the windowing system */
+	extern VkSwapchainKHR swapChain;
+	
+	/* The image format for the given swapchain images */
+	extern VkFormat swapChainImageFormat;
+	
+	/* The 2D extent of the swapchain images. Usually this matches the window dimensions. */
+	extern VkExtent2D swapChainExtent;
+
+	/* The final images to be rendered to before presenting */
+	extern std::vector<VkImage> swapChainImages;
+
+	/* Opaque handles to the swaptchain images */
+	extern std::vector<VkImageView> swapChainImageViews;
+
+	extern std::atomic_bool prepared;
+
+	/* Abstracts a native platform surface or window object for use with Vulkan */
+	extern VkSurfaceKHR surface;
+
+	struct SemaphoreStruct {
+		/* Offscreen submission and execution */
+		VkSemaphore offscreenComplete;
+		/* Swap chain image presentation */
+		VkSemaphore presentComplete;
+		/* Command buffer submission and execution */
+		VkSemaphore renderComplete;
+		/* UI overlay submission and execution */
+		VkSemaphore overlayComplete;
+	};
+
+	/* Synchronization semaphores */
+	extern SemaphoreStruct semaphores;
 
 	/* ------------------------------------------*/
 	/* FUNCTIONS                                 */
 	/* ------------------------------------------*/
+
+	/* Initializes all required Vulkan objects. Should be called on application startup. */
 	extern bool Initialize(InitializationParameters parameters);
 	
 	/* GLFW Initialization */
 	extern void InitWindow();
 	extern int CreateNewWindow(int width, int height, std::string title, GLFWmonitor *monitor, GLFWwindow *share);
 	extern void MakeContextCurrent(GLFWwindow *window);
-	extern void SetFullScreen(bool fullscreen, int windowPos[2] = PreviousWindowPos, int windowSize[2] = PreviousWindowSize);
+	extern void SetFullScreen(bool fullscreen, uint32_t windowPos[2] = PreviousWindowPos, uint32_t windowSize[2] = PreviousWindowSize);
 	extern void SetWindowHidden(bool hidewindow);
 
 	/* Vulkan Instance Creation */
@@ -138,15 +220,8 @@ namespace VKDK {
 	/* Create Image Views */
 	extern void CreateImageViews();
 
-	/* Create Render Pass */
-	extern void CreateRenderPass();
-
-	/* Create Descriptor Set */
-	//extern void CreateDescriptorSetLayout();
-
-	/* Create Graphics Pipeline */
-	extern void CreateGraphicsPipeline();
-	extern VkShaderModule createShaderModule(const std::vector<char>& code);
+	/* Create Global Render Pass */
+	extern void CreateGlobalRenderPass();
 	
 	/* Create Frame Buffers */
 	extern void CreateFrameBuffers();
@@ -157,34 +232,61 @@ namespace VKDK {
 	/* Create Depth Resources */
 	extern void CreateDepthResources();
 
-	/* Create Texture Image */
-	extern void CreateTextureImage();
+	/* Create Texture Image (TODO: consider removing this) */
+	//extern void CreateTextureImage();
 
 	/* Create Texture Image View */
 	extern void CreateTextureImageView();
 
-	/* Create Texture Sampler */
-	extern void CreateTextureSampler();
+	/* Create Texture Sampler (TODO: consider removing this) */
+	//extern void CreateTextureSampler();
+	
+	/* Returns the index to some device memory properties */
+	extern uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
-	extern void LoadModel();
-
-	/* Create Vertex Buffer */
-	extern void CreateVertexBuffer();
-	extern void CreateIndexBuffer();
-	extern void CreateUniformBuffer();
+	/* Creates a device side buffer attached to device memory of a given size */
 	extern void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	
+	/* Copies a given number of bytes from a source buffer to a destination buffer */
 	extern void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
-	/* Create Descriptor Pool */
-	//extern void CreateDescriptorPool();
-
-	/* Create Descriptor Set */
-	//extern void CreateDescriptorSet();
-
-	/* Create Command Buffers */
+	/* Create Render Command Buffers */
 	extern void CreateCommandBuffers();
-	extern void StartCommandBufferRecording(int imageIndex);
-	extern void StopCommandBufferRecording(int imageIndex);
+	extern void BeginRenderPass(VkCommandBuffer &commandBuffer, VkFramebuffer &framebuffer, VkRenderPass &renderPass, glm::vec4 clearColor = glm::vec4(0.0,0.0,0.0,0.0));
+	extern void EndRenderPass(VkCommandBuffer &commandBuffer);
+	//extern void DrawFrame();
+	extern VkResult AcquireNextImage(VkSemaphore presentCompleteSemaphore, uint32_t *imageIndex);
+	extern VkResult QueuePresent(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore = VK_NULL_HANDLE);
+	extern bool PrepareFrame();
+	extern bool SubmitFrame();
+
+	/* Allocates a one time command buffer, and begins recording commands on it. */
+	VkCommandBuffer beginSingleTimeCommands();
+
+	/* Ends a one time command buffer, and destroys it. */
+	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+	/**
+	* Allocate a command buffer from the command pool
+	*
+	* @param level Level of the new command buffer (primary or secondary)
+	* @param (Optional) begin If true, recording on the new command buffer will be started (vkBeginCommandBuffer) (Defaults to false)
+	*
+	* @return A handle to the allocated command buffer
+	*/
+	VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level, bool begin = false);
+	
+	/**
+	* Finish command buffer recording and submit it to a queue
+	*
+	* @param commandBuffer Command buffer to flush
+	* @param queue Queue to submit the command buffer to
+	* @param free (Optional) Free the command buffer once it has been submitted (Defaults to true)
+	*
+	* @note The queue that the command buffer is submitted to must be from the same family index as the pool it was allocated from
+	* @note Uses a fence to ensure command buffer has finished executing
+	*/
+	void FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue, bool free = true);
 
 	/* Create Semaphores */
 	extern void CreateSemaphores();
@@ -193,21 +295,19 @@ namespace VKDK {
 	extern void OnWindowResized(GLFWwindow* window, int width, int height);
 	extern void ErrorCallback(int _error, const char* description);
 	
-
 	/* Misc Functions */
 	extern void print(std::string s, bool forced = false);
-	extern std::string loadFile(std::string name);
+	//extern std::string loadFile(std::string name);
+	
+	/* Returns whether or not the current GLFW window should close */
 	extern bool ShouldClose();
 	
-	extern void DrawFrame(uint32_t imageIndex);
-	extern void TestDraw1();
-	extern void UpdateUniformBuffer();
+
 	extern bool OptimizeSwapchain(int swapchainResult);
-	uint32_t GetNextImageIndex();
+	uint32_t AquireNewFrameBuffer();
 	extern void RecreateSwapChain();
 	extern bool SwapChainOutOfDate;
-	extern void SetClearColor(float r, float g, float b, float a);
-
+	
 	/* Cleanup */
 	extern void CleanupSwapChain();
 	extern void Terminate();

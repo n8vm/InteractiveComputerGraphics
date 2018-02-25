@@ -2,12 +2,14 @@
 #include "vkdk.hpp"
 #include "Components/Meshes/Mesh.hpp"
 
+class Scene;
+
 namespace Components {
 	namespace Materials {
 		/* A material defines a render interface, and cannot be instantiated directly. */
 		class Material {
 		public:
-			virtual void render(std::shared_ptr<Components::Meshes::Mesh> mesh) = 0;
+			virtual void render(Scene *scene, std::shared_ptr<Components::Meshes::Mesh> mesh) = 0;
 			virtual void update(glm::mat4 model, glm::mat4 view, glm::mat4 projection) = 0;
 			virtual void cleanup() = 0;
 
@@ -37,4 +39,14 @@ namespace Components {
 
 #include "Components/Materials/SurfaceMaterials/UniformColoredSurface.hpp"
 #include "Components/Materials/SurfaceMaterials/NormalSurface.hpp"
+#include "Components/Materials/SurfaceMaterials/TexCoordSurface.hpp"
 #include "Components/Materials/SurfaceMaterials/BlinnSurface.hpp"
+#include "Components/Materials/SurfaceMaterials/TexturedBlinnSurface.hpp"
+
+	//inline void InitializeAllMaterials(int maxOfEach) {
+	//	Components::Materials::SurfaceMaterials::NormalSurface::Initialize(maxOfEach);
+	//	Components::Materials::SurfaceMaterials::TexCoordSurface::Initialize(maxOfEach);
+	//	Components::Materials::SurfaceMaterials::UniformColoredSurface::Initialize(maxOfEach);
+	//	Components::Materials::SurfaceMaterials::BlinnSurface::Initialize(maxOfEach);
+	//	Components::Materials::SurfaceMaterials::TexturedBlinnSurface::Initialize(maxOfEach);
+	//}

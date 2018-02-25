@@ -2,6 +2,7 @@ set (System_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
 	${CMAKE_CURRENT_SOURCE_DIR}/System.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/System.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Scene.hpp
 	PARENT_SCOPE)
 
 set (System_KRNL

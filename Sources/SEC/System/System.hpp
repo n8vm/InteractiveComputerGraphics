@@ -5,60 +5,45 @@
 #include "Entities/Cameras/Camera.hpp"
 #include "Components/Meshes/Mesh.hpp"
 #include "Components/Materials/Material.hpp"
+#include "Components/Textures/Texture.hpp"
 #include "Entities/Lights/Light.hpp" // Might need to move this down a bit 
 
 #include "vkdk.hpp"
 #include <unordered_map>
 
+#include "Scene.hpp"
+
 /* For some reason, if i dont use standard here, the system namespace doesn't appear anywhere else */
 using namespace std;
 
 namespace System {
-//using namespace Entities;
-//using namespace Materials;
 	
 	/* Threads */
 	extern thread *UpdateThread;
+	extern thread *EventThread;
+	extern thread *RenderThread;
 	extern thread *RaycastThread;
 	extern atomic<bool> quit;
 
 	extern int UpdateRate;
 	extern int FrameRate;
-	extern int currentImageIndex;
 
-	extern Entities::Entity World;
-	//extern Entity Screen;
+	extern std::shared_ptr<Scene> MainScene;
 
-	/* The entity whose forward vector is used for ray casting. */
-	//extern std::shared_ptr<Entity> Raycaster;
-	//extern bool MouseDown[5]; // TODO: fix this kludge
-
-
-	extern std::shared_ptr<Entities::Cameras::Camera> camera;
-
-	//extern unordered_map<string, std::shared_ptr<Texture>> TextureList;
-	//extern unordered_map<std::string, std::shared_ptr<Components::Materials::Material>> MaterialList;
+	extern unordered_map<string, std::shared_ptr<Components::Textures::Texture>> TextureList;
 	extern unordered_map<std::string, std::shared_ptr<Components::Meshes::Mesh>> MeshList;
-	extern unordered_map<std::string, std::shared_ptr<Entities::Lights::Light>> LightList;
-	//extern unordered_map<std::string, std::shared_ptr<TestClass>> LightList;
 
 	extern void UpdateLoop();
 	extern void RaycastLoop();
 	extern void RenderLoop();
-
-	extern VkBuffer GetLightBuffer();
-	extern VkBuffer GetCameraBuffer();
+	extern void EventLoop();
 
 	/* Call but dont define these */
 	extern void Initialize();
 	extern void Terminate();
-	extern void UpdateLightBuffer();
-	extern void UpdateCameraBuffer();
-	VkBuffer GetLightBuffer();
-	VkBuffer GetCameraBuffer();
 
 	/* Define these */
-	extern void SetupOpenGLState();
+	extern void SetupAdditionalRenderPasses();
 	extern void SetupComponents();
 	extern void SetupEntities();
 	extern void Start();

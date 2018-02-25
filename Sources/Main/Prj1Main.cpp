@@ -22,49 +22,89 @@ glm::vec3 hsvToRgb(glm::vec3 hsv) {
 	return rgb;
 }
 
+void System::EventLoop() {
+	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
+		glfwPollEvents();
+	}
+}
+
 float x = 0.0;
-glm::vec3 color;
+glm::vec4 clearColor;
 void System::UpdateLoop() {
-	while (!System::quit) {
-		x += .0000001;
-		if (x >= 1.0) x = 0;
-		color = hsvToRgb(glm::vec3(x, 1.0, 1.0));
+	auto lastTime = glfwGetTime();
+	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
+		auto currentTime = glfwGetTime();
+		if (currentTime - lastTime > 1.0 / UpdateRate) {
+			x += .001;
+			if (x >= 1.0) x = 0;
+			clearColor = glm::vec4(hsvToRgb(glm::vec3(x, 1.0, 1.0)), 0.0);
+			lastTime = currentTime;
+		}
 	}
 }
 
 void System::RenderLoop() {
+	using namespace VKDK;
 	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		VKDK::SetClearColor(color.r, color.g, color.b, 1.0);
-		glfwPollEvents();
-		VKDK::TestDraw1();
+		/* Aquire a new image from the swapchain */
+		PrepareFrame();
+		
+		/* Kind of kludgy, but re-record command buffers to update clear color. */
+		System::MainScene->setClearColor(clearColor);
+		System::MainScene->recordRenderPass();
+
+		/* Submit to graphics queue  */
+		Scene::SubmitToGraphicsQueueInfo info;
+		info.commandBuffers = { VKDK::drawCmdBuffers[VKDK::swapIndex] };
+		info.graphicsQueue = VKDK::graphicsQueue;
+		info.signalSemaphores = { VKDK::semaphores.renderComplete };
+		info.waitSemaphores = { VKDK::semaphores.presentComplete };
+		System::MainScene->submitToGraphicsQueue(info);
+
+		/* Submit the frame for presenting. */
+		SubmitFrame();
 	}
 
-	vkDeviceWaitIdle(VKDK::device);
+	vkDeviceWaitIdle(device);
 }
 
 void System::Start() {
 	if (System::quit) return;
 	
-	/* Update on seperate thread */
+	/* Render on seperate thread */
+	System::RenderThread = new std::thread(System::RenderLoop);
+
+	/* Render on seperate thread */
 	System::UpdateThread = new std::thread(System::UpdateLoop);
 
-	/* Render on the current thread */
-	System::RenderLoop();
+	/* Update events on the current thread */
+	System::EventLoop();
 }
 
 void System::Cleanup() {
 	/* Quit */
 	System::quit = true;
 
+	System::RenderThread->join();
 	System::UpdateThread->join();
 	
+	delete(System::RenderThread);
 	delete(System::UpdateThread);
+}
+
+void System::Initialize() {
+	MainScene = make_shared<Scene>(true);
+}
+
+void System::Terminate() {
+	MainScene->cleanup();
 }
 
 int main() {
 		VKDK::InitializationParameters vkdkParams = { 1024, 1024, "Project 1 - Hello World", false, false, true };
 		if (VKDK::Initialize(vkdkParams) != VK_SUCCESS) System::quit = true;
 
+		System::Initialize();
 		System::Start();
 		System::Terminate();
 		System::Cleanup();

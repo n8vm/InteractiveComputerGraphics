@@ -88,13 +88,13 @@ namespace Components::Meshes {
 			1.f
 		};
 		std::array<float, 8> uvs = {
-			1.f,
-			1.f,
 			0.f,
 			1.f,
 			1.f,
+			1.f,
 			0.f,
 			0.f,
+			1.f,
 			0.f
 		};
 		std::array<unsigned short, 36> indices = {

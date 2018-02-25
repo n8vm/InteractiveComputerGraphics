@@ -1,0 +1,26 @@
+# Blender MTL File: 'chickenV2.blend'
+# Material Count: 2
+
+newmtl Chicken
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.200000 0.064305 0.043869
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 1
+map_Kd C:\Users\Nate\AppData\Local\Temp\Temp1_79670_Chicken.zip\ChickenNorm.png
+map_Bump C:\\Users\\Nate\\AppData\\Local\\Temp\\Temp1_79670_Chicken.zip\\ChickenNorm.png
+
+newmtl Comb
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.640000 0.640000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 0.000000
+illum 1
+map_Kd C:\Users\Nate\AppData\Local\Temp\Temp1_79670_Chicken.zip\ChickenNorm.png
+map_d C:\\Users\\Nate\\AppData\\Local\\Temp\\Temp1_79670_Chicken.zip\\UV-Texture.png

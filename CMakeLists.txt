@@ -38,6 +38,10 @@ include_directories(SYSTEM ${GLFW_INCLUDE_DIR})
 find_package(GLM REQUIRED)
 include_directories(SYSTEM ${GLM_INCLUDE_DIR})
 
+# use GLI
+find_package(GLI REQUIRED)
+include_directories(SYSTEM ${GLI_INCLUDE_DIR})
+
 # use Vulkan
 find_package(Vulkan REQUIRED)
 include_directories(SYSTEM ${Vulkan_INCLUDE_DIR})
@@ -68,6 +72,18 @@ generate_folder_hierarchy("${PRJ2_SRC}")
 add_executable (PRJ3-Shading "${PRJ3_SRC}")
 target_link_libraries (PRJ3-Shading ${LIBRARIES} VKDK SEC)
 generate_folder_hierarchy("${PRJ3_SRC}")
+
+add_executable (PRJ4-Textures "${PRJ4_SRC}")
+target_link_libraries (PRJ4-Textures ${LIBRARIES} VKDK SEC)
+generate_folder_hierarchy("${PRJ4_SRC}")
+
+add_executable (PRJ5-Render-Buffers "${PRJ5_SRC}")
+target_link_libraries (PRJ5-Render-Buffers ${LIBRARIES} VKDK SEC)
+generate_folder_hierarchy("${PRJ5_SRC}")
+
+add_executable (PRJ6-Environment-Mapping "${PRJ6_SRC}")
+target_link_libraries (PRJ6-Environment-Mapping ${LIBRARIES} VKDK SEC)
+generate_folder_hierarchy("${PRJ6_SRC}")
 
 #------------------------------------------------------------
 # INSTALL TARGETS

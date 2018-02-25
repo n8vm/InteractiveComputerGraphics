@@ -2,10 +2,19 @@
 #include "vkdk.hpp"
 #include "Mesh.hpp"
 
+#include <iostream>
+#include <sys/stat.h>
+#include <errno.h>
+#include <cstring>
+
 namespace Components::Meshes {
 	/* An obj mesh contains vertex information from an obj file that has been loaded to the GPU. */
 	class OBJMesh : public Mesh {
 	public:
+		OBJMesh(std::string filepath) {
+			loadFromOBJ(filepath);
+		}
+
 		void cleanup() {
 			/* Destroy index buffer */
 			vkDestroyBuffer(VKDK::device, indexBuffer, nullptr);
@@ -27,7 +36,20 @@ namespace Components::Meshes {
 		obj::Model model;
 		/* Loads a mesh from an obj file */
 		void loadFromOBJ(std::string objPath) {
+			struct stat st;
+			if (stat(objPath.c_str(), &st) != 0)
+				throw std::runtime_error(objPath + " does not exist!");
+
 			model = obj::loadModelFromFile(objPath);
+			if (model.vertex.size() == 0)
+				throw std::runtime_error(objPath + " has no vertices!");
+			if (model.faces.size() == 0)
+				throw std::runtime_error(objPath + " has no faces!");
+			if (model.texCoord.size() == 0)
+				throw std::runtime_error(objPath + " has no texture coordinates!");
+			if (model.normal.size() == 0)
+				throw std::runtime_error(objPath + " has no normals!");
+
 			computeCentroid();
 
 			/* TODO: Upload data to a vulkan device buffer */
@@ -36,6 +58,7 @@ namespace Components::Meshes {
 			createNormalBuffer();
 			createTexCoordBuffer();
 		}
+
 		VkBuffer getVertexBuffer() {
 			return vertexBuffer;
 		}

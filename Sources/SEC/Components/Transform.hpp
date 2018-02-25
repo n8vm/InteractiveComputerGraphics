@@ -189,6 +189,9 @@ namespace Components {
 			SetRotation(GetRotation() * additionalRotation);
 			UpdateRotation();
 		}
+		void AddRotation(float angle, vec3 axis) {
+			AddRotation(glm::angleAxis(angle, axis));
+		}
 		void UpdateRotation() {
 			localToParentRotation = glm::toMat4(rotation.load());
 			parentToLocalRotation = glm::inverse(localToParentRotation.load());

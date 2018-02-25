@@ -1,0 +1,13 @@
+# Blender MTL File: 'chickenV2.blend'
+# Material Count: 1
+
+newmtl Material.001
+Ns 266.666667
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.640000 0.640000
+Ks 0.642857 0.642857 0.642857
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd C:\Users\Nate\AppData\Local\Temp\Temp1_79670_Chicken.zip\UV-Texture.png

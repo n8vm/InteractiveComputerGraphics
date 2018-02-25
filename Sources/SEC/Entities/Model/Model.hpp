@@ -2,6 +2,8 @@
 #include "Entities/Entity.hpp"
 #include "Components/Materials/Material.hpp"
 
+class Scene;
+
 namespace Entities {
 	
 	class Model : public Entity {
@@ -17,20 +19,27 @@ namespace Entities {
 		std::shared_ptr<Components::Meshes::Mesh> mesh;
 
 		/* Models use their materials to render meshes */
-		virtual void render(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
+		virtual void render(Scene *scene) {
+			for (int i = 0; i < materials.size(); ++i) {
+				materials[i]->render(scene, mesh);
+			}
+
+			Entity::render(scene);
+		};
+
+		virtual void update(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
 			glm::mat4 new_model = model * transform.LocalToParentMatrix();
 			for (int i = 0; i < materials.size(); ++i) {
 				materials[i]->update(new_model, view, projection); // TODO: move to update thread 
-				materials[i]->render(mesh);
 			}
 
-			Entity::render(model, view, projection);
-		};
+			Entity::update(model, view, projection);
+		}
 
 		void cleanup() {
-			for (auto &mat : materials) {
+			/*for (auto &mat : materials) {
 				mat->cleanup();
-			}
+			}*/
 		}
 
 		void setMesh(std::shared_ptr<Components::Meshes::Mesh> mesh) {

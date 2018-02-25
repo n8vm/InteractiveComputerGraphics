@@ -14,5 +14,6 @@ namespace Entities::Cameras {
 		virtual glm::mat4 getView() = 0;
 		virtual glm::mat4 getProjection() = 0;
 		virtual float getNear() = 0;
+		virtual void setWindowSize(int width, int height) {};
 	};
 }

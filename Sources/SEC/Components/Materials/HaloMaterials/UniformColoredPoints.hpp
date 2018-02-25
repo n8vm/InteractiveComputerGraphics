@@ -6,44 +6,50 @@
 #include "System/System.hpp"
 #include <array>
 
+#include "System/Scene.hpp"
+
 
 namespace Components::Materials::HaloMaterials {
-	class UniformColoredPoints : public Material {
+	class UniformColoredPoint : public Material {
 	public:
-		static void Initialize(int maxDescriptorSets) {
-			UniformColoredPoints::maxDescriptorSets = maxDescriptorSets;
+		static void Initialize(int maxDescriptorSets, std::vector<VkRenderPass> renderPasses) {
+			UniformColoredPoint::maxDescriptorSets = maxDescriptorSets;
 			createDescriptorSetLayout();
 			createDescriptorPool();
-			setupGraphicsPipeline();
+			setupGraphicsPipeline(renderPasses);
 		}
 
 		static void Destroy() {
+			for (UniformColoredPoint ucs : UniformColoredPoints) ucs.cleanup();
+
 			/* Clean up descriptor pool, descriptor layout, pipeline layout, and pipeline */
 			vkDestroyDescriptorPool(VKDK::device, descriptorPool, nullptr);
 			vkDestroyDescriptorSetLayout(VKDK::device, descriptorSetLayout, nullptr);
 			vkDestroyPipelineLayout(VKDK::device, pipelineLayout, nullptr);
-			vkDestroyPipeline(VKDK::device, graphicsPipeline, nullptr);
+			for (auto pipeline : graphicsPipelines)
+				vkDestroyPipeline(VKDK::device, pipeline.second, nullptr);
 		}
 
 		/* Primarily used to account for render pass changes */
-		static void RefreshPipeline() {
+		static void RefreshPipeline(std::vector<VkRenderPass> renderPasses) {
 			vkDestroyPipelineLayout(VKDK::device, pipelineLayout, nullptr);
-			vkDestroyPipeline(VKDK::device, graphicsPipeline, nullptr);
-			setupGraphicsPipeline();
+			for (auto pipeline : graphicsPipelines)
+				vkDestroyPipeline(VKDK::device, pipeline.second, nullptr);
+			setupGraphicsPipeline(renderPasses);
 		}
-		
+
 		/* Note: one material instance per entity! Cleanup before destroying VKDK stuff */
-		UniformColoredPoints() : Material() {
+		UniformColoredPoint(std::shared_ptr<Scene> scene) : Material() {
 			/* Should I create a descriptor set here? If so, how many do I create?
-			
-				If only one object will be using this material, then I could create one descriptor set. 
+
+				If only one object will be using this material, then I could create one descriptor set.
 				However, if multiple objects intend to use the same material, then I might need multiple descriptor sets...
 
 				Thinking, maybe materials should be static, since the "state" of the material depends heavily on descriptor set...
-				
+
 				So, render would become a static method, which uses an initialized graphics pipeline and provided VBO, IBO, Descriptor data
 
-				How does that effect the concept of "adding" a material to an entity? 
+				How does that effect the concept of "adding" a material to an entity?
 
 				Would be nice to wrap descriptor set info for different materials
 
@@ -51,7 +57,9 @@ namespace Components::Materials::HaloMaterials {
 			*/
 
 			createUniformBuffer();
-			createDescriptorSet();
+			createDescriptorSet(scene);
+
+			UniformColoredPoints.push_back(*this);
 		}
 
 		void cleanup() {
@@ -60,13 +68,14 @@ namespace Components::Materials::HaloMaterials {
 			vkDestroyBuffer(VKDK::device, uniformBuffer, nullptr);
 			vkFreeMemory(VKDK::device, uniformBufferMemory, nullptr);
 		}
-		
+
+		float x = 1;
 		/* TODO: use seperate descriptor set for model view projection, update only once per update tick */
 		void update(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
 			/* Update uniform buffer */
 			UniformBufferObject ubo = {};
 			ubo.model = model;
-			ubo.pointSize = pointSize;
+			ubo.pointSize = pointSize + x;
 			ubo.color = color;
 
 			/* Map uniform buffer, copy data directly, then unmap */
@@ -76,9 +85,17 @@ namespace Components::Materials::HaloMaterials {
 			vkUnmapMemory(VKDK::device, uniformBufferMemory);
 		}
 
-		void render(std::shared_ptr<Meshes::Mesh> mesh) {
+		void render(Scene *scene, std::shared_ptr<Components::Meshes::Mesh> mesh) {
+			if (!mesh) {
+				std::cout << "UniformColoredPoints: mesh is empty, not rendering!" << std::endl;
+				return;
+			}
+
+			/* Look up the pipeline cooresponding to this render pass */
+			VkPipeline pipeline = graphicsPipelines[scene->getRenderPass()];
+
 			/* Bind the pipeline for this material */
-			vkCmdBindPipeline(VKDK::commandBuffers[System::currentImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+			vkCmdBindPipeline(scene->getCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
 			/* Get mesh data */
 			VkBuffer vertexBuffer = mesh->getVertexBuffer();
@@ -88,12 +105,12 @@ namespace Components::Materials::HaloMaterials {
 			VkBuffer vertexBuffers[] = { vertexBuffer };
 			VkDeviceSize offsets[] = { 0 };
 
-			vkCmdBindVertexBuffers(VKDK::commandBuffers[System::currentImageIndex], 0, 1, vertexBuffers, offsets);
-			vkCmdBindIndexBuffer(VKDK::commandBuffers[System::currentImageIndex], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
-			vkCmdBindDescriptorSets(VKDK::commandBuffers[System::currentImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+			vkCmdBindVertexBuffers(scene->getCommandBuffer(), 0, 1, vertexBuffers, offsets);
+			vkCmdBindIndexBuffer(scene->getCommandBuffer(), indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindDescriptorSets(scene->getCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 			/* Draw elements indexed */
-			vkCmdDrawIndexed(VKDK::commandBuffers[System::currentImageIndex], totalIndices, 1, 0, 0, 0);
+			vkCmdDrawIndexed(scene->getCommandBuffer(), totalIndices, 1, 0, 0, 0);
 		}
 
 		void setColor(float r, float g, float b, float a) {
@@ -110,11 +127,14 @@ namespace Components::Materials::HaloMaterials {
 		static VkShaderModule fragShaderModule;
 
 		static VkPipelineLayout pipelineLayout;
-		static VkPipeline graphicsPipeline;
+		static std::unordered_map<VkRenderPass, VkPipeline> graphicsPipelines;
 
 		static VkDescriptorPool descriptorPool;
 		static VkDescriptorSetLayout descriptorSetLayout;
 		static uint32_t maxDescriptorSets;
+
+		static std::vector<UniformColoredPoint> UniformColoredPoints;
+
 
 		struct UniformBufferObject {
 			glm::mat4 model;
@@ -138,7 +158,7 @@ namespace Components::Materials::HaloMaterials {
 			uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 			uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
-			std::array<VkDescriptorSetLayoutBinding, 2> bindings = {cboLayoutBinding, uboLayoutBinding };
+			std::array<VkDescriptorSetLayoutBinding, 2> bindings = { cboLayoutBinding, uboLayoutBinding };
 			VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 			layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 			layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -168,7 +188,7 @@ namespace Components::Materials::HaloMaterials {
 			}
 		}
 
-		static void setupGraphicsPipeline() {
+		static void setupGraphicsPipeline(std::vector<VkRenderPass> renderPasses) {
 			/* Read in shader modules */
 			auto vertShaderCode = readFile(ResourcePath "MaterialShaders/HaloMaterials/UniformColoredPoints/vert.spv");
 			auto fragShaderCode = readFile(ResourcePath "MaterialShaders/HaloMaterials/UniformColoredPoints/frag.spv");
@@ -218,24 +238,13 @@ namespace Components::Materials::HaloMaterials {
 			inputAssembly.primitiveRestartEnable = VK_FALSE;
 
 			/* Viewports and Scissors */
-			VkViewport viewport = {};
-			viewport.x = 0.0f;
-			viewport.y = 0.0f;
-			viewport.width = (float)VKDK::swapChainExtent.width;
-			viewport.height = (float)VKDK::swapChainExtent.height;
-			viewport.minDepth = 0.0f;
-			viewport.maxDepth = 1.0f;
-
-			VkRect2D scissor = {};
-			scissor.offset = { 0, 0 };
-			scissor.extent = VKDK::swapChainExtent;
-
+			// Note: This is actually overriden by the dynamic states (see below)
 			VkPipelineViewportStateCreateInfo viewportState = {};
 			viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 			viewportState.viewportCount = 1;
-			viewportState.pViewports = &viewport;
 			viewportState.scissorCount = 1;
-			viewportState.pScissors = &scissor;
+			viewportState.pViewports = VK_NULL_HANDLE;
+			viewportState.pScissors = VK_NULL_HANDLE;
 
 			/* Rasterizer */
 			VkPipelineRasterizationStateCreateInfo rasterizer = {};
@@ -251,7 +260,7 @@ namespace Components::Materials::HaloMaterials {
 			rasterizer.depthBiasClamp = 0.0f; // Optional
 			rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
 
-																							/* Multisampling */
+			/* Multisampling */
 			VkPipelineMultisampleStateCreateInfo multisampling = {};
 			multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 			multisampling.sampleShadingEnable = VK_FALSE;
@@ -261,7 +270,7 @@ namespace Components::Materials::HaloMaterials {
 			multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
 			multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
-																								 /* Depth and Stencil testing */
+			 /* Depth and Stencil testing */
 			VkPipelineDepthStencilStateCreateInfo depthStencil = {};
 			depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 			depthStencil.depthTestEnable = VK_TRUE;
@@ -274,7 +283,7 @@ namespace Components::Materials::HaloMaterials {
 			depthStencil.front = {}; // Optional
 			depthStencil.back = {}; // Optional
 
-															/* Color Blending */
+			/* Color Blending */
 			VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
 			colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 			colorBlendAttachment.blendEnable = VK_FALSE;
@@ -296,15 +305,16 @@ namespace Components::Materials::HaloMaterials {
 			colorBlending.blendConstants[2] = 0.0f; // Optional
 			colorBlending.blendConstants[3] = 0.0f; // Optional
 
-																							/* Dynamic State */
+			/* Dynamic State */
 			VkDynamicState dynamicStates[] = {
 				VK_DYNAMIC_STATE_VIEWPORT,
+				VK_DYNAMIC_STATE_SCISSOR,
 				VK_DYNAMIC_STATE_LINE_WIDTH
 			};
 
 			VkPipelineDynamicStateCreateInfo dynamicState = {};
 			dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-			dynamicState.dynamicStateCount = 2;
+			dynamicState.dynamicStateCount = 3;
 			dynamicState.pDynamicStates = dynamicStates;
 
 			/* Connect things together with pipeline layout */
@@ -319,29 +329,37 @@ namespace Components::Materials::HaloMaterials {
 				throw std::runtime_error("failed to create pipeline layout!");
 			}
 
-			/* Now we can create a graphics pipeline! */
-			VkGraphicsPipelineCreateInfo pipelineInfo = {};
-			pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-			pipelineInfo.stageCount = 2;
-			pipelineInfo.pStages = shaderStages;
-			pipelineInfo.pVertexInputState = &vertexInputInfo;
-			pipelineInfo.pInputAssemblyState = &inputAssembly;
-			pipelineInfo.pViewportState = &viewportState;
-			pipelineInfo.pRasterizationState = &rasterizer;
-			pipelineInfo.pMultisampleState = &multisampling;
-			pipelineInfo.pDepthStencilState = &depthStencil;
-			pipelineInfo.pColorBlendState = &colorBlending;
-			pipelineInfo.pDynamicState = nullptr; // Optional
+			/* Now we can create a graphics pipelines! */
+			std::vector<VkGraphicsPipelineCreateInfo> pipelineInfos(renderPasses.size());
+			for (int i = 0; i < renderPasses.size(); ++i) {
+				pipelineInfos[i].sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+				pipelineInfos[i].stageCount = 2;
+				pipelineInfos[i].pStages = shaderStages;
+				pipelineInfos[i].pVertexInputState = &vertexInputInfo;
+				pipelineInfos[i].pInputAssemblyState = &inputAssembly;
+				pipelineInfos[i].pViewportState = &viewportState;
+				pipelineInfos[i].pRasterizationState = &rasterizer;
+				pipelineInfos[i].pMultisampleState = &multisampling;
+				pipelineInfos[i].pDepthStencilState = &depthStencil;
+				pipelineInfos[i].pColorBlendState = &colorBlending;
+				pipelineInfos[i].pDynamicState = &dynamicState; // Optional
 
-			pipelineInfo.layout = pipelineLayout;
+				pipelineInfos[i].layout = pipelineLayout;
 
-			pipelineInfo.renderPass = VKDK::renderPass;
-			pipelineInfo.subpass = 0;
+				pipelineInfos[i].renderPass = renderPasses[i];
+				pipelineInfos[i].subpass = 0;
 
-			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-			pipelineInfo.basePipelineIndex = -1; // Optional
-			if (vkCreateGraphicsPipelines(VKDK::device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+				pipelineInfos[i].basePipelineHandle = VK_NULL_HANDLE; // Optional
+				pipelineInfos[i].basePipelineIndex = -1; // Optional
+			}
+			
+			std::vector<VkPipeline> pipelines(renderPasses.size());
+			if (vkCreateGraphicsPipelines(VKDK::device, VK_NULL_HANDLE, pipelineInfos.size(), pipelineInfos.data(), nullptr, pipelines.data()) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create graphics pipeline!");
+			}
+
+			for (int i = 0; i < renderPasses.size(); ++i) {
+				graphicsPipelines[renderPasses[i]] = pipelines[i];
 			}
 
 			vkDestroyShaderModule(VKDK::device, fragShaderModule, nullptr);
@@ -400,7 +418,7 @@ namespace Components::Materials::HaloMaterials {
 			VKDK::CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, uniformBufferMemory);
 		}
 
-		void createDescriptorSet() {
+		void createDescriptorSet(std::shared_ptr<Scene> scene) {
 			VkDescriptorSetLayout layouts[] = { descriptorSetLayout };
 			VkDescriptorSetAllocateInfo allocInfo = {};
 			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -413,7 +431,7 @@ namespace Components::Materials::HaloMaterials {
 			}
 
 			VkDescriptorBufferInfo cameraBufferInfo = {};
-			cameraBufferInfo.buffer = System::GetCameraBuffer();
+			cameraBufferInfo.buffer = scene->getCameraBuffer();
 			cameraBufferInfo.offset = 0;
 			cameraBufferInfo.range = sizeof(Entities::Cameras::CameraBufferObject);
 

@@ -10,32 +10,38 @@
 namespace Components::Materials::SurfaceMaterials {
 	class BlinnSurface : public Material {
 	public:
-		static void Initialize(int maxDescriptorSets) {
+		static void Initialize(int maxDescriptorSets, std::vector<VkRenderPass> renderPasses) {
 			BlinnSurface::maxDescriptorSets = maxDescriptorSets;
 			createDescriptorSetLayout();
 			createDescriptorPool();
-			setupGraphicsPipeline();
+			setupGraphicsPipeline(renderPasses);
 		}
 
 		static void Destroy() {
+			for (BlinnSurface mat : BlinnSurfaces) mat.cleanup();
+
 			/* Clean up descriptor pool, descriptor layout, pipeline layout, and pipeline */
 			vkDestroyDescriptorPool(VKDK::device, descriptorPool, nullptr);
 			vkDestroyDescriptorSetLayout(VKDK::device, descriptorSetLayout, nullptr);
 			vkDestroyPipelineLayout(VKDK::device, pipelineLayout, nullptr);
-			vkDestroyPipeline(VKDK::device, graphicsPipeline, nullptr);
+			for (auto pipeline : graphicsPipelines)
+				vkDestroyPipeline(VKDK::device, pipeline.second, nullptr);
 		}
 
 		/* Primarily used to account for render pass changes */
-		static void RefreshPipeline() {
+		static void RefreshPipeline(std::vector<VkRenderPass> renderPasses) {
 			vkDestroyPipelineLayout(VKDK::device, pipelineLayout, nullptr);
-			vkDestroyPipeline(VKDK::device, graphicsPipeline, nullptr);
-			setupGraphicsPipeline();
+			for (auto pipeline : graphicsPipelines)
+				vkDestroyPipeline(VKDK::device, pipeline.second, nullptr);
+			setupGraphicsPipeline(renderPasses);
 		}
 
 		/* Note: one material instance per entity! Cleanup before destroying VKDK stuff */
-		BlinnSurface() : Material() {
+		BlinnSurface(std::shared_ptr<Scene> scene) : Material() {
 			createUniformBuffer();
-			createDescriptorSet();
+			createDescriptorSet(scene);
+
+			BlinnSurfaces.push_back(*this);
 		}
 
 		void cleanup() {
@@ -62,9 +68,17 @@ namespace Components::Materials::SurfaceMaterials {
 			vkUnmapMemory(VKDK::device, uniformBufferMemory);
 		}
 
-		void render(std::shared_ptr<Meshes::Mesh> mesh) {
+		void render(Scene *scene, std::shared_ptr<Components::Meshes::Mesh> mesh) {
+			if (!mesh) {
+				std::cout << "BlinnSurface: mesh is empty, not rendering!" << std::endl;
+				return;
+			}
+
+			/* Look up the pipeline cooresponding to this render pass */
+			VkPipeline pipeline = graphicsPipelines[scene->getRenderPass()];
+
 			/* Bind the pipeline for this material */
-			vkCmdBindPipeline(VKDK::commandBuffers[System::currentImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+			vkCmdBindPipeline(scene->getCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
 			/* Get mesh data */
 			VkBuffer vertexBuffer = mesh->getVertexBuffer();
@@ -75,12 +89,12 @@ namespace Components::Materials::SurfaceMaterials {
 			VkBuffer vertexBuffers[] = { vertexBuffer, normalBuffer };
 			VkDeviceSize offsets[] = { 0 , 0 };
 
-			vkCmdBindVertexBuffers(VKDK::commandBuffers[System::currentImageIndex], 0, 2, vertexBuffers, offsets);
-			vkCmdBindIndexBuffer(VKDK::commandBuffers[System::currentImageIndex], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
-			vkCmdBindDescriptorSets(VKDK::commandBuffers[System::currentImageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+			vkCmdBindVertexBuffers(scene->getCommandBuffer(), 0, 2, vertexBuffers, offsets);
+			vkCmdBindIndexBuffer(scene->getCommandBuffer(), indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindDescriptorSets(scene->getCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 			/* Draw elements indexed */
-			vkCmdDrawIndexed(VKDK::commandBuffers[System::currentImageIndex], totalIndices, 1, 0, 0, 0);
+			vkCmdDrawIndexed(scene->getCommandBuffer(), totalIndices, 1, 0, 0, 0);
 		}
 
 		void setColor(glm::vec4 ka, glm::vec4 kd, glm::vec4 ks) {
@@ -95,11 +109,13 @@ namespace Components::Materials::SurfaceMaterials {
 		static VkShaderModule fragShaderModule;
 
 		static VkPipelineLayout pipelineLayout;
-		static VkPipeline graphicsPipeline;
+		static std::unordered_map<VkRenderPass, VkPipeline> graphicsPipelines;
 
 		static VkDescriptorPool descriptorPool;
 		static VkDescriptorSetLayout descriptorSetLayout;
 		static uint32_t maxDescriptorSets;
+
+		static std::vector<BlinnSurface> BlinnSurface::BlinnSurfaces;
 
 		struct UniformBufferObject {
 			glm::mat4 modelMatrix;
@@ -168,7 +184,7 @@ namespace Components::Materials::SurfaceMaterials {
 			}
 		}
 
-		static void setupGraphicsPipeline() {
+		static void setupGraphicsPipeline(std::vector<VkRenderPass> renderPasses) {
 			/* Read in shader modules */
 			auto vertShaderCode = readFile(ResourcePath "MaterialShaders/SurfaceMaterials/BlinnSurface/vert.spv");
 			auto fragShaderCode = readFile(ResourcePath "MaterialShaders/SurfaceMaterials/BlinnSurface/frag.spv");
@@ -220,24 +236,11 @@ namespace Components::Materials::SurfaceMaterials {
 			inputAssembly.primitiveRestartEnable = VK_FALSE;
 
 			/* Viewports and Scissors */
-			VkViewport viewport = {};
-			viewport.x = 0.0f;
-			viewport.y = 0.0f;
-			viewport.width = (float)VKDK::swapChainExtent.width;
-			viewport.height = (float)VKDK::swapChainExtent.height;
-			viewport.minDepth = 0.0f;
-			viewport.maxDepth = 1.0f;
-
-			VkRect2D scissor = {};
-			scissor.offset = { 0, 0 };
-			scissor.extent = VKDK::swapChainExtent;
-
+			// (dynamic)
 			VkPipelineViewportStateCreateInfo viewportState = {};
 			viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 			viewportState.viewportCount = 1;
-			viewportState.pViewports = &viewport;
 			viewportState.scissorCount = 1;
-			viewportState.pScissors = &scissor;
 
 			/* Rasterizer */
 			VkPipelineRasterizationStateCreateInfo rasterizer = {};
@@ -301,12 +304,13 @@ namespace Components::Materials::SurfaceMaterials {
 																							/* Dynamic State */
 			VkDynamicState dynamicStates[] = {
 				VK_DYNAMIC_STATE_VIEWPORT,
+				VK_DYNAMIC_STATE_SCISSOR,
 				VK_DYNAMIC_STATE_LINE_WIDTH
 			};
 
 			VkPipelineDynamicStateCreateInfo dynamicState = {};
 			dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-			dynamicState.dynamicStateCount = 2;
+			dynamicState.dynamicStateCount = 3;
 			dynamicState.pDynamicStates = dynamicStates;
 
 			/* Connect things together with pipeline layout */
@@ -321,29 +325,37 @@ namespace Components::Materials::SurfaceMaterials {
 				throw std::runtime_error("failed to create pipeline layout!");
 			}
 
-			/* Now we can create a graphics pipeline! */
-			VkGraphicsPipelineCreateInfo pipelineInfo = {};
-			pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-			pipelineInfo.stageCount = 2;
-			pipelineInfo.pStages = shaderStages;
-			pipelineInfo.pVertexInputState = &vertexInputInfo;
-			pipelineInfo.pInputAssemblyState = &inputAssembly;
-			pipelineInfo.pViewportState = &viewportState;
-			pipelineInfo.pRasterizationState = &rasterizer;
-			pipelineInfo.pMultisampleState = &multisampling;
-			pipelineInfo.pDepthStencilState = &depthStencil;
-			pipelineInfo.pColorBlendState = &colorBlending;
-			pipelineInfo.pDynamicState = nullptr; // Optional
+			/* Now we can create a graphics pipelines! */
+			std::vector<VkGraphicsPipelineCreateInfo> pipelineInfos(renderPasses.size());
+			for (int i = 0; i < renderPasses.size(); ++i) {
+				pipelineInfos[i].sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+				pipelineInfos[i].stageCount = 2;
+				pipelineInfos[i].pStages = shaderStages;
+				pipelineInfos[i].pVertexInputState = &vertexInputInfo;
+				pipelineInfos[i].pInputAssemblyState = &inputAssembly;
+				pipelineInfos[i].pViewportState = &viewportState;
+				pipelineInfos[i].pRasterizationState = &rasterizer;
+				pipelineInfos[i].pMultisampleState = &multisampling;
+				pipelineInfos[i].pDepthStencilState = &depthStencil;
+				pipelineInfos[i].pColorBlendState = &colorBlending;
+				pipelineInfos[i].pDynamicState = &dynamicState; // Optional
 
-			pipelineInfo.layout = pipelineLayout;
+				pipelineInfos[i].layout = pipelineLayout;
 
-			pipelineInfo.renderPass = VKDK::renderPass;
-			pipelineInfo.subpass = 0;
+				pipelineInfos[i].renderPass = renderPasses[i];
+				pipelineInfos[i].subpass = 0;
 
-			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-			pipelineInfo.basePipelineIndex = -1; // Optional
-			if (vkCreateGraphicsPipelines(VKDK::device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+				pipelineInfos[i].basePipelineHandle = VK_NULL_HANDLE; // Optional
+				pipelineInfos[i].basePipelineIndex = -1; // Optional
+			}
+
+			std::vector<VkPipeline> pipelines(renderPasses.size());
+			if (vkCreateGraphicsPipelines(VKDK::device, VK_NULL_HANDLE, pipelineInfos.size(), pipelineInfos.data(), nullptr, pipelines.data()) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create graphics pipeline!");
+			}
+
+			for (int i = 0; i < renderPasses.size(); ++i) {
+				graphicsPipelines[renderPasses[i]] = pipelines[i];
 			}
 
 			vkDestroyShaderModule(VKDK::device, fragShaderModule, nullptr);
@@ -418,7 +430,7 @@ namespace Components::Materials::SurfaceMaterials {
 			VKDK::CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, uniformBufferMemory);
 		}
 
-		void createDescriptorSet() {
+		void createDescriptorSet(std::shared_ptr<Scene> scene) {
 			VkDescriptorSetLayout layouts[] = { descriptorSetLayout };
 			VkDescriptorSetAllocateInfo allocInfo = {};
 			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -432,7 +444,7 @@ namespace Components::Materials::SurfaceMaterials {
 						
 			/* Camera buffer */
 			VkDescriptorBufferInfo cameraDescriptorBufferInfo = {};
-			cameraDescriptorBufferInfo.buffer = System::GetCameraBuffer();
+			cameraDescriptorBufferInfo.buffer = scene->getCameraBuffer();
 			cameraDescriptorBufferInfo.offset = 0;
 			cameraDescriptorBufferInfo.range = sizeof(Entities::Cameras::CameraBufferObject);
 
@@ -444,7 +456,7 @@ namespace Components::Materials::SurfaceMaterials {
 
 			/* Light buffer */
 			VkDescriptorBufferInfo lightDescriptorBufferInfo = {};
-			lightDescriptorBufferInfo.buffer = System::GetLightBuffer();
+			lightDescriptorBufferInfo.buffer = scene->getLightBuffer();
 			lightDescriptorBufferInfo.offset = 0;
 			lightDescriptorBufferInfo.range = sizeof(Entities::Lights::LightBufferObject);
 

@@ -10,6 +10,9 @@
 #include <memory>
 #include <string>
 #include "Components/Transform.hpp"
+#include "vkdk.hpp"
+
+class Scene;
 
 namespace Entities {
 
@@ -30,39 +33,34 @@ namespace Entities {
 		bool active = true;
 
 		/* Entities by themselves don't render. This is for scene graph traversal */
-		virtual void prerender(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
+		virtual void prerender(VkCommandBuffer &commandBuffer, VkRenderPass &renderPass, glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
 			glm::mat4 new_model = model * transform.LocalToParentMatrix();
 			
 			for (auto i : children) {
 				if (i.second.get()->active) {
-					i.second->prerender(new_model, view, projection);
+					i.second->prerender(commandBuffer, renderPass, new_model, view, projection);
 				}
 			}
 		};
 
 		/* Entities by themselves don't render. This is for scene graph traversal */
-		virtual void render(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
-			
-			glm::mat4 new_model = model * transform.LocalToParentMatrix();
-			//for (int i = 0; i < materials.size(); ++i) {
-			//	materials[i]->render(new_model, view, projection);
-			//}
-
+		virtual void render(Scene *scene) {
 			for (auto i : children) {
 				if (i.second.get()->active) {
-					i.second->render(new_model, view, projection);
+					i.second->render(scene);
 				}
 			}
 		};
 
 		void(*updateCallback) (Entity*) = nullptr;
 
-		virtual void update() {
+		virtual void update(glm::mat4 model, glm::mat4 view, glm::mat4 projection) {
 			if (updateCallback) updateCallback(this);
 
+			glm::mat4 new_model = model * transform.LocalToParentMatrix();
 			for (auto i : children) {
 				if (i.second.get()->active) {
-					i.second->update();
+					i.second->update(new_model, view, projection);
 				}
 			}
 		};

@@ -5,11 +5,11 @@ namespace Entities::Cameras {
 	/* A perspective gamera*/
 	class OrbitCamera : public Camera {
 	public:
-		OrbitCamera(glm::vec3 initialPos = glm::vec3(0.0), glm::vec3 rotatePoint = glm::vec3(0)) {
+		OrbitCamera(glm::vec3 initialPos = glm::vec3(0.0), glm::vec3 rotatePoint = glm::vec3(0), glm::vec3 up = glm::vec3(0.0, 1.0, 0.0)) {
 			using namespace glm;
 			transform.SetPosition(initialPos);
 
-			initialRot = conjugate(glm::toQuat(lookAt(initialPos, rotatePoint, transform.worldUp)));
+			initialRot = conjugate(glm::toQuat(lookAt(initialPos, rotatePoint, up)));
 			transform.SetRotation(initialRot);
 
 			this->initialPos = initialPos;

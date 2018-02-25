@@ -1,13 +1,15 @@
 #include "UniformColoredPoints.hpp"
 
 namespace Components::Materials::HaloMaterials {
-	VkShaderModule UniformColoredPoints::vertShaderModule;
-	VkShaderModule UniformColoredPoints::fragShaderModule;
+	std::vector<UniformColoredPoint> UniformColoredPoint::UniformColoredPoints;
+	
+	VkShaderModule UniformColoredPoint::vertShaderModule;
+	VkShaderModule UniformColoredPoint::fragShaderModule;
 
-	VkPipelineLayout UniformColoredPoints::pipelineLayout;
-	VkPipeline UniformColoredPoints::graphicsPipeline;
+	VkPipelineLayout UniformColoredPoint::pipelineLayout;
+	std::unordered_map<VkRenderPass, VkPipeline> UniformColoredPoint::graphicsPipelines;
 
-	VkDescriptorPool UniformColoredPoints::descriptorPool;
-	VkDescriptorSetLayout UniformColoredPoints::descriptorSetLayout;
-	uint32_t UniformColoredPoints::maxDescriptorSets;
+	VkDescriptorPool UniformColoredPoint::descriptorPool;
+	VkDescriptorSetLayout UniformColoredPoint::descriptorSetLayout;
+	uint32_t UniformColoredPoint::maxDescriptorSets;
 }

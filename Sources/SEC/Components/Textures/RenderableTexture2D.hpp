@@ -198,6 +198,11 @@ namespace Components::Textures {
 		int getHeight() {
 			return height;
 		}
+
+		VkImageLayout getLayout() {
+			return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		}
+
 	private:
 		int width, height;
 

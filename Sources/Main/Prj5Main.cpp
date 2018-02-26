@@ -24,6 +24,9 @@ void System::RenderLoop() {
 	int oldWidth = VKDK::CurrentWindowSize[0], oldHeight = VKDK::CurrentWindowSize[1];
 	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
 		auto currentTime = glfwGetTime();
+		/* Update Camera Buffer */
+		System::MainScene->updateCameraUBO();
+
 		/* Aquire a new image from the swapchain */
 		if (PrepareFrame() == true) System::MainScene->recordRenderPass();
 
@@ -74,12 +77,15 @@ void System::SetupComponents() {
 	using namespace Materials;
 	using namespace std;
 
+	PipelineParameters firstPipelineParameters = {};
+	firstPipelineParameters.renderPass = MainScene->subScenes["SubScene"]->getRenderPass();
+
+	PipelineParameters finalPipelineParameters = {};
+	finalPipelineParameters.renderPass = MainScene->getRenderPass();
+
 	/* Initialize Materials */
-	Materials::SurfaceMaterials::NormalSurface::Initialize(10, {System::MainScene->getRenderPass(), MainScene->subScenes["SubScene"]->getRenderPass()});
-	Materials::SurfaceMaterials::TexCoordSurface::Initialize(10, { System::MainScene->getRenderPass(), MainScene->subScenes["SubScene"]->getRenderPass() });
-	Materials::SurfaceMaterials::UniformColoredSurface::Initialize(10, { System::MainScene->getRenderPass(), MainScene->subScenes["SubScene"]->getRenderPass() });
-	Materials::SurfaceMaterials::BlinnSurface::Initialize(10, { System::MainScene->getRenderPass(), MainScene->subScenes["SubScene"]->getRenderPass() });
-	Materials::SurfaceMaterials::TexturedBlinnSurface::Initialize(10, { System::MainScene->getRenderPass(), MainScene->subScenes["SubScene"]->getRenderPass() });
+	Materials::SurfaceMaterials::UniformColoredSurface::Initialize(2, { firstPipelineParameters, finalPipelineParameters });
+	Materials::SurfaceMaterials::TexturedBlinnSurface::Initialize(5, { firstPipelineParameters, finalPipelineParameters });
 
 	/* Load a test texture */
 	TextureList["ChickenTexture"] = make_shared<Textures::Texture2D>(ResourcePath "Chicken/ChickenTexture.ktx");
@@ -98,8 +104,8 @@ void UpdateSubSceneLight(Entities::Entity *light) {
 	glfwGetCursorPos(VKDK::DefaultWindow, &subsceneX, &subsceneY);
 	if (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_ALT) && (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_RIGHT_CONTROL) || glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_CONTROL))) {
 		if (!glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_ALT)) return;
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), subsceneX - lastSubsceneX);
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 1.0, 0.0), subsceneY - lastSubsceneY);
+		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.up, subsceneX - lastSubsceneX);
+		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.right, subsceneY - lastSubsceneY);
 	}
 	else {
 		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), .2f);
@@ -113,8 +119,8 @@ void UpdateLight(Entities::Entity *light) {
 
 	glfwGetCursorPos(VKDK::DefaultWindow, &X, &Y);
 	if (!glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_ALT) && (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_RIGHT_CONTROL) || glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_CONTROL))) {
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), X - lastX);
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 1.0, 0.0), Y - lastY);
+		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.up, X - lastX);
+		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.right, Y - lastY);
 	}
 	else {
 		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), .2f);
@@ -254,10 +260,7 @@ void System::Cleanup() {
 		tex.second->cleanup(); 
 	}
 	
-	Components::Materials::SurfaceMaterials::NormalSurface::Destroy();
-	Components::Materials::SurfaceMaterials::TexCoordSurface::Destroy();
 	Components::Materials::SurfaceMaterials::UniformColoredSurface::Destroy();
-	Components::Materials::SurfaceMaterials::BlinnSurface::Destroy();
 	Components::Materials::SurfaceMaterials::TexturedBlinnSurface::Destroy();
 
 	using namespace VKDK;

@@ -6,8 +6,8 @@ namespace Components::Materials::SurfaceMaterials {
 	VkShaderModule TexCoordSurface::vertShaderModule;
 	VkShaderModule TexCoordSurface::fragShaderModule;
 
-	VkPipelineLayout TexCoordSurface::pipelineLayout;
-	std::unordered_map<VkRenderPass, VkPipeline> TexCoordSurface::graphicsPipelines;
+	std::unordered_map<VkRenderPass, VkPipelineLayout> TexCoordSurface::pipelineLayouts;
+	std::unordered_map<VkRenderPass, VkPipeline> TexCoordSurface::pipelines;
 
 	VkDescriptorPool TexCoordSurface::descriptorPool;
 	VkDescriptorSetLayout TexCoordSurface::descriptorSetLayout;

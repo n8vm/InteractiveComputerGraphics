@@ -6,8 +6,8 @@ namespace Components::Materials::HaloMaterials {
 	VkShaderModule UniformColoredPoint::vertShaderModule;
 	VkShaderModule UniformColoredPoint::fragShaderModule;
 
-	VkPipelineLayout UniformColoredPoint::pipelineLayout;
-	std::unordered_map<VkRenderPass, VkPipeline> UniformColoredPoint::graphicsPipelines;
+	std::unordered_map<VkRenderPass, VkPipelineLayout> UniformColoredPoint::pipelineLayouts;
+	std::unordered_map<VkRenderPass, VkPipeline> UniformColoredPoint::pipelines;
 
 	VkDescriptorPool UniformColoredPoint::descriptorPool;
 	VkDescriptorSetLayout UniformColoredPoint::descriptorSetLayout;

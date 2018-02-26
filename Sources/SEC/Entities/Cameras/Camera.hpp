@@ -5,6 +5,8 @@ namespace Entities::Cameras {
 	struct CameraBufferObject {
 		glm::mat4 View;
 		glm::mat4 Projection;
+		glm::mat4 ViewInverse;
+		glm::mat4 ProjectionInverse;
 	};
 
 	/* A camera is an entity which defines an interface for obtaining a projection matrix for rendering the scene.

@@ -9,4 +9,12 @@ set (SurfaceMaterials_SRC
 	${CMAKE_CURRENT_SOURCE_DIR}/BlinnSurface.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/TexturedBlinnSurface.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/TexturedBlinnSurface.cpp
-	PARENT_SCOPE) 
+	${CMAKE_CURRENT_SOURCE_DIR}/SkyboxSurface.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/SkyboxSurface.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/CubemapReflectionSurface.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/CubemapReflectionSurface.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/EyeSpaceReflectionSurface.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/EyeSpaceReflectionSurface.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/BlinnReflectionSurface.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/BlinnReflectionSurface.cpp
+	PARENT_SCOPE)

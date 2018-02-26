@@ -44,11 +44,12 @@ namespace Components {
 		atomic<vec3> up = vec3(0.0, 1.0, 0.0);
 		atomic<vec3> forward = vec3(0.0, 0.0, 1.0);
 		
-
+		atomic<mat4> localToParentTransform = mat4(1);
 		atomic<mat4> localToParentRotation = mat4(1);
 		atomic<mat4> localToParentPosition = mat4(1);
 		atomic<mat4> localToParentScale = mat4(1);
 
+		atomic<mat4> parentToLocalTransform = mat4(1);
 		atomic<mat4> parentToLocalRotation = mat4(1);
 		atomic<mat4> parentToLocalPosition = mat4(1);
 		atomic<mat4> parentToLocalScale = mat4(1);
@@ -175,6 +176,13 @@ namespace Components {
 			UpdateMatrix();
 		}
 
+		/* Used primarily for non-trivial transformations */
+		void SetTransform(glm::mat4 transformation) {
+			this->localToParentTransform.store(transformation);
+			this->parentToLocalTransform.store(glm::inverse(transformation));
+			UpdateMatrix();
+		}
+
 		quat GetRotation() {
 			return rotation.load();
 		}
@@ -246,8 +254,8 @@ namespace Components {
 
 		void UpdateMatrix() {
 
-			localToParentMatrix.store(localToParentPosition.load() * localToParentRotation.load() * localToParentScale.load());
-			parentToLocalMatrix.store(parentToLocalScale.load() * parentToLocalRotation.load() * parentToLocalPosition.load());
+			localToParentMatrix.store(localToParentTransform.load() * localToParentPosition.load() * localToParentRotation.load() * localToParentScale.load());
+			parentToLocalMatrix.store(parentToLocalTransform.load() * parentToLocalScale.load() * parentToLocalRotation.load() * parentToLocalPosition.load());
 
 			right.store(glm::vec3(localToParentMatrix.load()[0]));
 			up.store(glm::vec3(localToParentMatrix.load()[1]));

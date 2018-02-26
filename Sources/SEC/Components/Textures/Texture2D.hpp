@@ -10,6 +10,10 @@ namespace Components::Textures {
 	public:
 		/* Constructors */
 		Texture2D(std::string imagePath = ResourcePath "TutorialTextures/grid.png") {
+			struct stat st;
+			if (stat(imagePath.c_str(), &st) != 0)
+				throw std::runtime_error(imagePath + " does not exist!");
+
 			if (imagePath.substr(imagePath.find_last_of(".") + 1) == "ktx") {
 				createTextureImageKTX(imagePath);
 			}
@@ -26,97 +30,6 @@ namespace Components::Textures {
 
 			vkDestroyImage(VKDK::device, textureImage, nullptr);
 			vkFreeMemory(VKDK::device, textureImageMemory, nullptr);
-		}
-
-		// Create an image memory barrier used to change the layout of an image and put it into an active command buffer
-		void setImageLayout(VkCommandBuffer cmdBuffer, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout oldImageLayout, VkImageLayout newImageLayout, VkImageSubresourceRange subresourceRange)
-		{
-			// Create an image barrier object
-			VkImageMemoryBarrier imageMemoryBarrier{};
-			imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; 
-			imageMemoryBarrier.oldLayout = oldImageLayout;
-			imageMemoryBarrier.newLayout = newImageLayout;
-			imageMemoryBarrier.image = image;
-			imageMemoryBarrier.subresourceRange = subresourceRange;
-
-			// Only sets masks for layouts used in this example
-			// For a more complete version that can be used with other layouts see vks::tools::setImageLayout
-
-			// Source layouts (old)
-			switch (oldImageLayout)
-			{
-			case VK_IMAGE_LAYOUT_UNDEFINED:
-				// Only valid as initial layout, memory contents are not preserved
-				// Can be accessed directly, no source dependency required
-				imageMemoryBarrier.srcAccessMask = 0;
-				break;
-			case VK_IMAGE_LAYOUT_PREINITIALIZED:
-				// Only valid as initial layout for linear images, preserves memory contents
-				// Make sure host writes to the image have been finished
-				imageMemoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-				break;
-			case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-				// Old layout is transfer destination
-				// Make sure any writes to the image have been finished
-				imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				break;
-			}
-
-			// Target layouts (new)
-			switch (newImageLayout)
-			{
-			case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-				// Transfer source (copy, blit)
-				// Make sure any reads from the image have been finished
-				imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-				break;
-			case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-				// Transfer destination (copy, blit)
-				// Make sure any writes to the image have been finished
-				imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				break;
-			case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-				// Shader read (sampler, input attachment)
-				imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-				break;
-			}
-
-			/* Does this cause validation error ? */
-			VkPipelineStageFlags sourceStage;
-			VkPipelineStageFlags destinationStage;
-			if (oldImageLayout == VK_IMAGE_LAYOUT_UNDEFINED && newImageLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-				imageMemoryBarrier.srcAccessMask = 0;
-				imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-				sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-				destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-			}
-			else if (oldImageLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newImageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-				imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-				sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-				destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-			}
-			else {
-				throw std::invalid_argument("unsupported layout transition!");
-			}
-
-			// Put barrier on top of pipeline
-			//VkPipelineStageFlags srcStageFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-			//VkPipelineStageFlags destStageFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-
-			// Put barrier inside setup command buffer
-			vkCmdPipelineBarrier(
-				cmdBuffer,
-				sourceStage,
-				destinationStage,
-				VK_FLAGS_NONE,
-				0, nullptr,
-				0, nullptr,
-				1, &imageMemoryBarrier);
 		}
 
 		void createTextureImageKTX(std::string imagePath) {
@@ -471,6 +384,10 @@ namespace Components::Textures {
 
 		VkSampler getSampler() {
 			return textureSampler;
+		}
+
+		VkImageLayout getLayout() {
+			return textureImageLayout;
 		}
 
 	private:

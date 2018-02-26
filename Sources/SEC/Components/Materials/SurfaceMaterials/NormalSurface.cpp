@@ -6,8 +6,8 @@ namespace Components::Materials::SurfaceMaterials {
 	VkShaderModule NormalSurface::vertShaderModule;
 	VkShaderModule NormalSurface::fragShaderModule;
 
-	VkPipelineLayout NormalSurface::pipelineLayout;
-	std::unordered_map<VkRenderPass, VkPipeline> NormalSurface::graphicsPipelines;
+	std::unordered_map<VkRenderPass, VkPipelineLayout> NormalSurface::pipelineLayouts;
+	std::unordered_map<VkRenderPass, VkPipeline> NormalSurface::pipelines;
 
 	VkDescriptorPool NormalSurface::descriptorPool;
 	VkDescriptorSetLayout NormalSurface::descriptorSetLayout;

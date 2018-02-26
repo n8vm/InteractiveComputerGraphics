@@ -195,6 +195,9 @@ public:
 		vkUnmapMemory(VKDK::device, lightBufferMemory);
 	}
 
+	/* Useful for altering the location of the scene eg for reflections */
+	glm::mat4 SceneTransform = glm::mat4(1.0);
+
 	void updateCameraBuffer() {
 		if (!camera) return;
 
@@ -202,15 +205,26 @@ public:
 		Entities::Cameras::CameraBufferObject cbo = {};
 
 		/* To do: fill camera buffer object here */
-		cbo.View = camera->getView();
+		cbo.View = camera->getView() * SceneTransform;
 		cbo.Projection = camera->getProjection();
 		cbo.Projection[1][1] *= -1; // required so that image doesn't flip upside down.
+		cbo.ProjectionInverse = glm::inverse(camera->getProjection()); // Todo: account for -1 here...
+		cbo.ViewInverse = glm::inverse(camera->getView() * SceneTransform);
 
 		/* Map uniform buffer, copy data directly, then unmap */
 		void* data;
 		vkMapMemory(VKDK::device, cameraBufferMemory, 0, sizeof(cbo), 0, &data);
 		memcpy(data, &cbo, sizeof(cbo));
 		vkUnmapMemory(VKDK::device, cameraBufferMemory);
+	}
+
+	virtual void updateCameraUBO() {
+		///* First, update all sub scenes*/
+		//for (auto i : subScenes) {
+		//	i.second->update();
+		//}
+
+
 	}
 
 	virtual void update() {
@@ -228,7 +242,7 @@ public:
 			updateCallback(this);
 
 		if(camera)
-			entities->update(glm::mat4(1.0), camera->getView(), camera->getProjection());
+			entities->update(glm::mat4(1.0), camera->getView() * SceneTransform, camera->getProjection());
 	};
 
 	void setClearColor(glm::vec4 clearColor) {

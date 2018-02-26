@@ -8,6 +8,8 @@ layout(location = 0) out vec4 fragColor;
 layout(binding = 0) uniform CameraBufferObject {
     mat4 view;
     mat4 proj;
+    mat4 viewinv;
+    mat4 projinv;
 } cbo;
 
 layout(binding = 1) uniform UniformBufferObject {

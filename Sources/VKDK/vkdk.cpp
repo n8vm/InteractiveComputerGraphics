@@ -53,7 +53,8 @@ namespace VKDK {
 	VkPhysicalDeviceFeatures deviceFeatures;
 
 	const std::vector<const char*> deviceExtensions = {
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+		
 	};
 
 	VkQueue graphicsQueue;
@@ -496,11 +497,14 @@ namespace VKDK {
 		/* Check and see if physical devices are suitable, since not all cards are equal */
 		for (const auto& device : devices) {
 			if (IsDeviceSuitable(device)) {
-				vkGetPhysicalDeviceProperties(device, &deviceProperties);
-
 				print("\tChoosing device " + std::string(deviceProperties.deviceName));
 
 				physicalDevice = device;
+
+				// Store properties (including limits), features and memory properties of the phyiscal device (so that examples can check against them)
+				vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
+				vkGetPhysicalDeviceFeatures(physicalDevice, &deviceFeatures);
+				//vkGetPhysicalDeviceMemoryProperties(physicalDevice, &deviceMemoryProperties);
 				break;
 			}
 		}
@@ -613,8 +617,9 @@ namespace VKDK {
 		/* Now we'll specify the device features we'll need */
 		/* These are the features found in IsDeviceSuitable. */
 		/* For now, we don't care to use any features. Init all fields to VK_FALSE*/
-		deviceFeatures = {};
-		deviceFeatures.samplerAnisotropy = VK_TRUE;
+		//deviceFeatures = {};
+		//deviceFeatures.samplerAnisotropy = VK_TRUE;
+		//deviceFeatures.textureCompressionETC2 = VK_TRUE;
 
 		VkDeviceCreateInfo createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -770,7 +775,7 @@ namespace VKDK {
 		/* Prefer tripple buffer like mode */
 	
 		/* Only this one is guaranteed, so default return that.*/
-		VkPresentModeKHR bestMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;//VK_PRESENT_MODE_FIFO_KHR;
+		VkPresentModeKHR bestMode = (currentSettings.vsyncEnabled) ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
 
 		for (const auto& availablePresentMode : availablePresentModes) {
 			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {

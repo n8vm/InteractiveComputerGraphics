@@ -6,8 +6,8 @@ namespace Components::Materials::SurfaceMaterials {
 	VkShaderModule BlinnSurface::vertShaderModule;
 	VkShaderModule BlinnSurface::fragShaderModule;
 
-	VkPipelineLayout BlinnSurface::pipelineLayout;
-	std::unordered_map<VkRenderPass, VkPipeline> BlinnSurface::graphicsPipelines;
+	std::unordered_map<VkRenderPass, VkPipelineLayout> BlinnSurface::pipelineLayouts;
+	std::unordered_map<VkRenderPass, VkPipeline> BlinnSurface::pipelines;
 
 	VkDescriptorPool BlinnSurface::descriptorPool;
 	VkDescriptorSetLayout BlinnSurface::descriptorSetLayout;

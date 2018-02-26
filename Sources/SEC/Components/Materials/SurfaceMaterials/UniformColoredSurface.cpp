@@ -6,8 +6,8 @@ namespace Components::Materials::SurfaceMaterials {
 	VkShaderModule UniformColoredSurface::vertShaderModule;
 	VkShaderModule UniformColoredSurface::fragShaderModule;
 
-	VkPipelineLayout UniformColoredSurface::pipelineLayout;
-	std::unordered_map<VkRenderPass, VkPipeline> UniformColoredSurface::graphicsPipelines;
+	std::unordered_map<VkRenderPass, VkPipelineLayout> UniformColoredSurface::pipelineLayouts;
+	std::unordered_map<VkRenderPass, VkPipeline> UniformColoredSurface::pipelines;
 
 	VkDescriptorPool UniformColoredSurface::descriptorPool;
 	VkDescriptorSetLayout UniformColoredSurface::descriptorSetLayout;

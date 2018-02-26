@@ -22,6 +22,10 @@ void System::RenderLoop() {
 	int oldWidth = VKDK::CurrentWindowSize[0], oldHeight = VKDK::CurrentWindowSize[1];
 	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
 		auto currentTime = glfwGetTime();
+		
+		/* Update Camera Buffer */
+		System::MainScene->updateCameraUBO();
+
 		/* Aquire a new image from the swapchain */
 		if (PrepareFrame() == true) System::MainScene->recordRenderPass();
 
@@ -64,19 +68,18 @@ void System::SetupComponents() {
 	using namespace Materials;
 	using namespace std;
 
+	PipelineParameters parameters = {};
+	parameters.renderPass = MainScene->getRenderPass();
+
 	/* Initialize Materials */
-	Materials::SurfaceMaterials::NormalSurface::Initialize(10, { MainScene->getRenderPass() });
-	Materials::SurfaceMaterials::TexCoordSurface::Initialize(10, { MainScene->getRenderPass() });
-	Materials::SurfaceMaterials::UniformColoredSurface::Initialize(10, { MainScene->getRenderPass() });
-	Materials::SurfaceMaterials::BlinnSurface::Initialize(10, { MainScene->getRenderPass() });
-	Materials::SurfaceMaterials::TexturedBlinnSurface::Initialize(10, { MainScene->getRenderPass() });
+	Materials::SurfaceMaterials::UniformColoredSurface::Initialize(1, { parameters });
+	Materials::SurfaceMaterials::TexturedBlinnSurface::Initialize(3, { parameters });
 
 	/* Load a test texture */
 	TextureList["ChickenTexture"] = make_shared<Textures::Texture2D>(ResourcePath "Chicken/ChickenTexture.ktx");
 	TextureList["ChickenTexture_s"] = make_shared<Textures::Texture2D>(ResourcePath "Chicken/ChickenTexture.ktx");
 	TextureList["GrassTexture"] = make_shared<Textures::Texture2D>(ResourcePath "Chicken/grass.ktx");
-
-	
+		
 	/* Load the model (by default, a teapot) */
 	MeshList["Body"] = make_shared<Meshes::OBJMesh>(ResourcePath "Chicken/Chicken.obj");
 	MeshList["Eyes"] = make_shared<Meshes::OBJMesh>(ResourcePath "Chicken/Eyes.obj");
@@ -88,9 +91,8 @@ double lastx, lasty, x, y;
 void UpdateLight(Entities::Entity *light) {
 	glfwGetCursorPos(VKDK::DefaultWindow, &x, &y);
 	if (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_RIGHT_CONTROL) || glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_CONTROL)) {
-
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), x - lastx);
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 1.0, 0.0), y - lasty);
+		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.up, x - lastx);
+		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.right, y - lasty);
 	}
 	else {
 		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), .2f);
@@ -116,11 +118,6 @@ void System::SetupEntities() {
 	glm::vec4 ls = glm::vec4(.8, .8, .8, 1.0);
 	auto lightSurface = make_shared<SurfaceMaterials::UniformColoredSurface>(System::MainScene);
 	lightSurface->setColor(la + ld + ls);
-
-	auto texCoordMat1 = make_shared<SurfaceMaterials::TexCoordSurface>(System::MainScene);
-	auto texCoordMat2 = make_shared<SurfaceMaterials::TexCoordSurface>(System::MainScene);
-	auto texCoordMat3 = make_shared<SurfaceMaterials::TexCoordSurface>(System::MainScene);
-
 
 	/* Create an orbit camera to look at the model */
 	glm::vec3 centriod = MeshList["Body"]->getCentroid();
@@ -190,10 +187,7 @@ void System::Cleanup() {
 	for (auto &mesh : MeshList) { mesh.second->cleanup(); }
 	for (auto &tex : TextureList) { tex.second->cleanup(); }
 	
-	Components::Materials::SurfaceMaterials::NormalSurface::Destroy();
-	Components::Materials::SurfaceMaterials::TexCoordSurface::Destroy();
 	Components::Materials::SurfaceMaterials::UniformColoredSurface::Destroy();
-	Components::Materials::SurfaceMaterials::BlinnSurface::Destroy();
 	Components::Materials::SurfaceMaterials::TexturedBlinnSurface::Destroy();
 }
 

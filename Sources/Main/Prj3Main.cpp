@@ -19,6 +19,10 @@ void System::RenderLoop() {
 	int oldWidth = VKDK::CurrentWindowSize[0], oldHeight = VKDK::CurrentWindowSize[1];
 	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
 		auto currentTime = glfwGetTime();
+		
+		/* Update Camera Buffer */
+		System::MainScene->updateCameraUBO();
+		
 		/* Aquire a new image from the swapchain */
 		if (PrepareFrame() == true) System::MainScene->recordRenderPass();
 
@@ -60,9 +64,8 @@ double lastx, lasty, x, y;
 void UpdateLight(Entities::Entity *light) {
 	glfwGetCursorPos(VKDK::DefaultWindow, &x, &y);
 	if (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_RIGHT_CONTROL) || glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_CONTROL)) {
-
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), x - lastx);
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 1.0, 0.0), y - lasty);
+		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.up, x - lastx);
+		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.right, y - lasty);
 	}
 	else {
 		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), .2f);
@@ -77,9 +80,11 @@ void System::SetupComponents() {
 	using namespace std;
 
 	/* Initialize Materials */
-	Materials::SurfaceMaterials::NormalSurface::Initialize(10, { MainScene->getRenderPass() });
-	Materials::SurfaceMaterials::UniformColoredSurface::Initialize(10, { MainScene->getRenderPass() });
-	Materials::SurfaceMaterials::BlinnSurface::Initialize(10, { MainScene->getRenderPass() });
+	PipelineParameters parameters = {};
+	parameters.renderPass = MainScene->getRenderPass();
+
+	Materials::SurfaceMaterials::UniformColoredSurface::Initialize(1, {parameters});
+	Materials::SurfaceMaterials::BlinnSurface::Initialize(4, { parameters });
 	
 	/* Load the model (by default, a teapot) */
 	auto mesh = make_shared<Meshes::OBJMesh>(Options::objLocation);
@@ -193,10 +198,8 @@ void System::Cleanup() {
 
 	for (auto &mesh : MeshList) { mesh.second->cleanup(); }
 
-	Components::Materials::SurfaceMaterials::NormalSurface::Destroy();
 	Components::Materials::SurfaceMaterials::UniformColoredSurface::Destroy();
 	Components::Materials::SurfaceMaterials::BlinnSurface::Destroy();
-
 }
 
 void System::Initialize() {

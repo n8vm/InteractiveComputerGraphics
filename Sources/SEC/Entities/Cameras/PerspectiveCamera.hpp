@@ -52,6 +52,6 @@ namespace Entities::Cameras {
 		float fov = 45;
 		float aspectRatio = 1.0;
 		float nearClippingPlane = .1;
-		float farClippingPlane = 100.0;
+		float farClippingPlane = 1000.0;
 	};
 }

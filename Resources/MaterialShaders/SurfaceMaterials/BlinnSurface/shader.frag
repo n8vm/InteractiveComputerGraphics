@@ -6,6 +6,8 @@
 layout(binding = 0) uniform CameraBufferObject {
     mat4 view;
     mat4 proj;
+    mat4 viewinv;
+    mat4 projinv;
 } cbo;
 
 layout(binding = 1) uniform UniformBufferObject {
@@ -21,10 +23,6 @@ struct LightObject { /* TODO: maybe change this name */
 	vec4 ambient;
 	vec4 diffuse;
 	vec4 specular;
-	//float pad, constantAttenuation, linearAttenuation, quadraticAttenuation;
-	// float constantAttenuation, linearAttenuation, quadraticAttenuation;
-	// float spotCutoff, spotExponent;
-	// vec3 spotDirection;
 };
 
 layout(binding = 2) uniform LightBufferObject {

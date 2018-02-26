@@ -17,6 +17,9 @@ void System::RenderLoop() {
 	int oldWidth = VKDK::CurrentWindowSize[0], oldHeight = VKDK::CurrentWindowSize[1];
 	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
 		auto currentTime = glfwGetTime();
+		/* Update Camera Buffer */
+		System::MainScene->updateCameraUBO();
+		
 		/* Aquire a new image from the swapchain */
 		if (PrepareFrame() == true) System::MainScene->recordRenderPass();
 
@@ -71,8 +74,11 @@ void System::SetupComponents() {
 	using namespace Materials;
 	using namespace std;
 
+	std::vector<PipelineParameters> pipelineParameters(1);
+	pipelineParameters[0].renderPass = MainScene->getRenderPass();
+
 	/* Initialize Materials */
-	Materials::HaloMaterials::UniformColoredPoint::Initialize(3, {MainScene->getRenderPass()});
+	Materials::HaloMaterials::UniformColoredPoint::Initialize(3, pipelineParameters);
 	
 	/* Load the model (by default, a teapot) */
 	shared_ptr<Meshes::OBJMesh> mesh = make_shared<Meshes::OBJMesh>(Options::objLocation);

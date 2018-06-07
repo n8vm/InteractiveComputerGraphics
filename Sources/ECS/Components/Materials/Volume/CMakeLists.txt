@@ -1,0 +1,5 @@
+set (Volume_SRC
+	${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+	${CMAKE_CURRENT_SOURCE_DIR}/Raycast.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Voxelize.hpp
+	PARENT_SCOPE)

@@ -1,0 +1,18 @@
+set (Systems_SRC 
+	${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+	${CMAKE_CURRENT_SOURCE_DIR}/ComponentManager.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/ComponentManager.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/SceneGraph.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/SceneGraph.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Systems.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Systems.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Engine.hpp
+	# ${CMAKE_CURRENT_SOURCE_DIR}/RenderSystem.hpp
+	# ${CMAKE_CURRENT_SOURCE_DIR}/EventSystem.hpp
+	PARENT_SCOPE)
+
+set (System_KRNL
+	PARENT_SCOPE)
+
+set (System_SHDR
+	PARENT_SCOPE)

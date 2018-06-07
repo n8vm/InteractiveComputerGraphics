@@ -1,0 +1,12 @@
+set (Textures_SRC
+	${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+	${CMAKE_CURRENT_SOURCE_DIR}/Textures.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Texture.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Texture.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Texture2D.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/TextureCube.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/RenderableTexture2D.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/RenderableTextureCube.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Texture3D.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/stb_image.h
+	PARENT_SCOPE) 

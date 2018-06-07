@@ -1,232 +1,244 @@
-#include "Options/Options.h"
-#include "System/System.hpp"
+﻿// ┌──────────────────────────────────────────────────────────────────┐
+// │ Developer : n8vm - Shading                                       |
+// │   Shows how lights can be used to illuminate certain materials,  |
+// |   like Blinn Phong.                                              |
+// └──────────────────────────────────────────────────────────────────┘
+
+#include "vkdk.hpp"
 #include "glm/glm.hpp"
+#include "ecs.hpp"
 
-#include "Entities/Model/Model.hpp"
-#include "Entities/Cameras/SpinTableCamera.hpp"
-#include "Entities/Lights/Light.hpp"
+namespace E = Entities;
+namespace C = Components;
+namespace S = Systems;
 
-#include "Components/Meshes/Mesh.hpp"
-using namespace std;
+namespace CM = Systems::ComponentManager;
+namespace SG = Systems::SceneGraph;
 
-void System::RenderLoop() {
-	using namespace VKDK;
-	auto lastTime = glfwGetTime();
+namespace Math = Components::Math;
+namespace Lights = Components::Lights;
+namespace Materials = Components::Materials::Standard;
+namespace Meshes = Components::Meshes;
+namespace Cameras = Entities::Cameras;
 
-	/* Record the commands required to render the current scene. */
-	System::MainScene->recordRenderPass();
+namespace PRJ3 {
+	void SetupComponents() {
+		/* Initialize component manager */
+		CM::Initialize();
 
-	int oldWidth = VKDK::CurrentWindowSize[0], oldHeight = VKDK::CurrentWindowSize[1];
-	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		auto currentTime = glfwGetTime();
-		
-		/* Update Camera Buffer */
-		System::MainScene->updateCameraUBO();
-		
-		/* Aquire a new image from the swapchain */
-		if (PrepareFrame() == true) System::MainScene->recordRenderPass();
+		/* Setup perspectives */
+		auto perspective = Math::Perspective::Create("MainPerspective",
+			VKDK::renderPass, VKDK::drawCmdBuffers, VKDK::swapChainFramebuffers,
+			VKDK::swapChainExtent.width, VKDK::swapChainExtent.height);
 
-		/* Submit to graphics queue  */
-		Scene::SubmitToGraphicsQueueInfo info;
-		info.commandBuffers = { VKDK::drawCmdBuffers[VKDK::swapIndex] };
-		info.graphicsQueue = VKDK::graphicsQueue;
-		info.signalSemaphores = { VKDK::semaphores.renderComplete };
-		info.waitSemaphores = { VKDK::semaphores.presentComplete };
-		System::MainScene->submitToGraphicsQueue(info);
+		/* Initialize Pipeline Settings */
+		auto pipelineKey = PipelineKey(VKDK::renderPass, 0, 0);
+		auto pipelineParameters = PipelineParameters::Create(pipelineKey);
 
-		/* Submit the frame for presenting. */
-		if (SubmitFrame() == true) System::MainScene->recordRenderPass();
+		/* Initialize Materials */
+		Materials::UniformColor::Initialize(3);
+		Materials::Blinn::Initialize(4);
 
-		std::cout << "\r Framerate: " << currentTime - lastTime;
-		lastTime = currentTime;
+		/* Create Material Instances */
+		auto redmat = Materials::Blinn::Create("RedMaterial", pipelineKey);
+		auto greenmat = Materials::Blinn::Create("GreenMaterial", pipelineKey);
+		auto bluemat = Materials::Blinn::Create("BlueMaterial", pipelineKey);
+		auto greymat = Materials::Blinn::Create("GreyMaterial", pipelineKey);
+		auto whitemat = Materials::UniformColor::Create("WhiteMaterial", pipelineKey);
+
+		redmat->setColor(Colors::red);
+		greenmat->setColor(Colors::green);
+		bluemat->setColor(Colors::blue);
+		greymat->setColor(Colors::darkGrey);
+		whitemat->setColor(Colors::white);
+
+		/* Create a light component for shading */
+		auto l1 = Lights::PointLights::Create("Light1");
+		auto l2 = Lights::PointLights::Create("Light2");
+		auto l3 = Lights::PointLights::Create("Light3");
+
+		l1->setFalloffType(Lights::FalloffType::NONE);
+		l2->setFalloffType(Lights::FalloffType::LINEAR);
+		l3->setFalloffType(Lights::FalloffType::SQUARED);
+
+		/* Load meshes */
+		Meshes::OBJMesh::Create("Teapot", ResourcePath "Teapot/teapot.obj");
 	}
-	vkDeviceWaitIdle(device);
-}
 
-void System::EventLoop() {
-	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		glfwPollEvents();
+	void SetupEntities() {
+		auto centriod = CM::Meshes["Teapot"]->mesh->getCentroid();
+		centriod *= .1f;
+		auto camera = Cameras::SpinTableCamera::Create("Camera",
+			glm::vec3(0.0f, -7.0f, 5.0f), glm::vec3(0.0f, 0.0f, centriod.z), glm::vec3(0.0f, 0.0f, 1.0f));
+		camera->addComponent(CM::Perspectives["MainPerspective"]);
+
+		/* Create a set of teapots */
+		auto redTeapot = E::Entity::Create("RedTeapot");
+		redTeapot->transform->SetPosition(-1.5f, 1.0f, 0.0f);
+		redTeapot->transform->SetScale(.1f, .1f, .1f);
+		redTeapot->transform->SetRotation(-3.0f, glm::vec3(0.0f, 0.0f, 1.0f));
+		redTeapot->addComponent(CM::Materials["RedMaterial"], CM::Meshes["Teapot"]);
+
+		auto greenTeapot = E::Entity::Create("GreenTeapot");
+		greenTeapot->transform->SetPosition(0.0f, -1.5f, 0.0f);
+		greenTeapot->transform->SetScale(.1f, .1f, .1f);
+		greenTeapot->transform->SetRotation(-2.0f, glm::vec3(0.0f, 0.0f, 1.0f));
+		greenTeapot->addComponent(CM::Materials["GreenMaterial"], CM::Meshes["Teapot"]);
+
+		auto blueTeapot = E::Entity::Create("BlueTeapot");
+		blueTeapot->transform->SetPosition(1.75f, 0.5f, 0.0f);
+		blueTeapot->transform->SetScale(.1f, .1f, .1f);
+		blueTeapot->transform->SetRotation(-0.3f, glm::vec3(0.0f, 0.0f, 1.0f));
+		blueTeapot->addComponent(CM::Materials["BlueMaterial"], CM::Meshes["Teapot"]);
+
+		/* ... and a floor to set the teapots on */
+		auto floor = E::Entity::Create("Floor");
+		floor->transform->SetScale(4.0f, 4.0f, 4.0f);
+		floor->addComponent(CM::Meshes["Plane"], CM::Materials["GreyMaterial"]);
+
+		/* Add finally some point lights*/
+		auto light1 = E::Entity::Create("Light1");
+		light1->transform->SetPosition(glm::vec3(0.0f, 3.0f, 1.5f));
+		light1->transform->SetScale(glm::vec3(0.1f, 0.1f, 0.1f));
+		light1->addComponent(CM::Materials["WhiteMaterial"], CM::Meshes["Sphere"], CM::Lights["Light1"]);
+		light1->callbacks->update = [](std::shared_ptr<E::Entity> light) {
+			light->transform->RotateAround(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), 0.1f);
+			light->transform->AddPosition(glm::vec3(0.0f, 0.0f, 0.015f) * sinf((float)glfwGetTime()));
+		};
+
+		auto light2 = E::Entity::Create("Light2");
+		light2->transform->SetPosition(glm::vec3(-3.0f * sqrtf(3.0f) * .5f, 3.0f * -.5f, 1.5f));
+		light2->transform->SetScale(glm::vec3(0.1f, 0.1f, 0.1f));
+		light2->addComponent(CM::Materials["WhiteMaterial"], CM::Meshes["Sphere"], CM::Lights["Light2"]);
+		light2->callbacks->update = [](std::shared_ptr<E::Entity> light) {
+			light->transform->RotateAround(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), .1f);
+			light->transform->AddPosition(glm::vec3(0.0f, 0.0f, 0.015f) * sinf((float)glfwGetTime()));
+		};
+
+		auto light3 = E::Entity::Create("Light3");
+		light3->transform->SetPosition(glm::vec3(3.0 * sqrtf(3.0f) * .5f, 3.0f * -.5f, 1.5f));
+		light3->transform->SetScale(glm::vec3(0.1, 0.1, 0.1));
+		light3->addComponent(CM::Materials["WhiteMaterial"], CM::Meshes["Sphere"], CM::Lights["Light3"]);
+		light3->callbacks->update = [](std::shared_ptr<E::Entity> light) {
+			light->transform->RotateAround(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), .1f);
+			light->transform->AddPosition(glm::vec3(0.0f, 0.0f, 0.015f) * sinf((float)glfwGetTime()));
+		};
+	}
+
+	void SetupSystems() {
+		S::RenderSystem = []() {
+			bool refreshRequired = false;
+			auto lastTime = glfwGetTime();
+
+			/* Take the perspective from the camera */
+			auto perspective = CM::Perspectives["MainPerspective"];
+
+			/* Record the commands required to render the current scene. */
+			perspective->recordRenderPass(glm::vec4(0.0, 0.0, 0.0, 0.0));
+
+			while (!VKDK::ShouldClose() && !Systems::quit) {
+				auto currentTime = glfwGetTime();
+
+				/* Upload Perspective UBOs before render */
+				for (auto pair : CM::Perspectives) {
+					pair.second->uploadUBO();
+				}
+
+				/* Aquire a new image from the swapchain */
+				refreshRequired |= VKDK::PrepareFrame();
+
+				/* Submit to graphics queue  */
+				VKDK::SubmitToGraphicsQueueInfo info;
+				info.commandBuffers = { VKDK::drawCmdBuffers[VKDK::swapIndex] };
+				info.graphicsQueue = VKDK::graphicsQueue;
+				info.signalSemaphores = { VKDK::semaphores.renderComplete };
+				info.waitSemaphores = { VKDK::semaphores.presentComplete };
+				VKDK::SubmitToGraphicsQueue(info);
+
+				/* Submit the frame for presenting. */
+				refreshRequired |= VKDK::SubmitFrame();
+				if (refreshRequired) {
+					VKDK::RecreateSwapChain();
+
+					/* Add a perspective to render the swapchain */
+					perspective->refresh(VKDK::renderPass, VKDK::drawCmdBuffers, VKDK::swapChainFramebuffers,
+						VKDK::swapChainExtent.width, VKDK::swapChainExtent.height);
+
+					perspective->recordRenderPass(glm::vec4(0.0, 0.0, 0.0, 0.0));
+					refreshRequired = false;
+				}
+				std::cout << "\r Framerate: " << currentTime - lastTime;
+				lastTime = currentTime;
+			}
+			vkDeviceWaitIdle(VKDK::device);
+		};
+
+		S::EventSystem = []() {
+			while (!VKDK::ShouldClose() && !Systems::quit) {
+				glfwPollEvents();
+			}
+		};
+
+		S::UpdateSystem = []() {
+			auto lastTime = glfwGetTime();
+			while (!VKDK::ShouldClose() && !Systems::quit) {
+				auto currentTime = glfwGetTime();
+				if (currentTime - lastTime > 1.0 / S::UpdateRate) {
+					/* Update Entities */
+					for (auto pair : SG::Entities) {
+						if (pair.second->callbacks->update) {
+							pair.second->callbacks->update(pair.second);
+						}
+					}
+
+					/* Upload Transform UBOs */
+					for (auto pair : SG::Entities) {
+						glm::mat4 worldToLocal = pair.second->getWorldToLocalMatrix();
+						glm::mat4 localToWorld = glm::inverse(worldToLocal);
+						pair.second->transform->uploadUBO(worldToLocal, localToWorld);
+					}
+
+					/* Upload Material UBOs */
+					for (auto pair : CM::Materials) {
+						pair.second->material->uploadUBO();
+					}
+
+					/* Upload Point Light UBO */
+					for (auto pair : CM::Lights) {
+						Lights::PointLights::UploadUBO();
+					}
+
+					lastTime = currentTime;
+				}
+			}
+		};
+
+		S::currentThreadType = S::SystemTypes::Event;
+	}
+
+	void CleanupComponents() {
+		CM::Cleanup();
+
+		/* Destroy the requested material pipelines */
+		Materials::UniformColor::Destroy();
+		Materials::Blinn::Destroy();
 	}
 }
 
-void System::UpdateLoop() {
-	auto lastTime = glfwGetTime();
-	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		auto currentTime = glfwGetTime();
-		if (currentTime - lastTime > 1.0 / UpdateRate) {
-			System::MainScene->update();
-			lastTime = currentTime;
-		}
-	}
-}
-
-double lastx, lasty, x, y;
-void UpdateLight(Entities::Entity *light) {
-	glfwGetCursorPos(VKDK::DefaultWindow, &x, &y);
-	if (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_RIGHT_CONTROL) || glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_CONTROL)) {
-		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.up, x - lastx);
-		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.right, y - lasty);
-	}
-	else {
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), .2f);
-	}
-	lastx = x;
-	lasty = y;
-}
-
-void System::SetupComponents() {
-	using namespace Components;
-	using namespace Materials;
-	using namespace std;
-
-	/* Initialize Materials */
-	PipelineParameters parameters = {};
-	parameters.renderPass = MainScene->getRenderPass();
-
-	Materials::SurfaceMaterials::UniformColoredSurface::Initialize(1, {parameters});
-	Materials::SurfaceMaterials::BlinnSurface::Initialize(4, { parameters });
-	
-	/* Load the model (by default, a teapot) */
-	auto mesh = make_shared<Meshes::OBJMesh>(Options::objLocation);
-	MeshList.emplace("mesh", mesh);
-
-	auto sphere = make_shared<Meshes::Sphere>();
-	MeshList.emplace("sphere", sphere);
-
-	auto plane = make_shared<Meshes::Plane>();
-	MeshList.emplace("plane", plane);
-}
-
-void System::SetupEntities() {
-	using namespace std;
-	using namespace Entities;
-	using namespace Components::Materials;
-
-	/* Create a material for that mesh */
-	glm::vec4 white = glm::vec4(1.0, 1.0, 1.0, 1.0);
-	glm::vec4 grey = glm::vec4(.1, .1, .1, 1.0);
-	glm::vec4 red = glm::vec4(1.0, 0.0, 0.0, 1.0);
-	glm::vec4 green = glm::vec4(0.0, 1.0, 0.0, 1.0);
-	glm::vec4 blue = glm::vec4(0.0, 0.0, 1.0, 1.0);
-
-	auto redSurface = make_shared<SurfaceMaterials::BlinnSurface>(System::MainScene);
-	auto greenSurface = make_shared<SurfaceMaterials::BlinnSurface>(System::MainScene);
-	auto blueSurface = make_shared<SurfaceMaterials::BlinnSurface>(System::MainScene);
-	auto planeSurface = make_shared<SurfaceMaterials::BlinnSurface>(System::MainScene);
-
-	redSurface->setColor(red, red, white);
-	greenSurface->setColor(green, green, white);
-	blueSurface->setColor(blue, blue, white);
-	planeSurface->setColor(grey, grey, white);
-	
-	glm::vec4 la = glm::vec4(.1, .1, .1, 1.0);
-	glm::vec4 ld = glm::vec4(.8, .8, .8, 1.0);
-	glm::vec4 ls = glm::vec4(.8, .8, .8, 1.0);
-	auto lightSurface = make_shared<SurfaceMaterials::UniformColoredSurface>(System::MainScene);
-	lightSurface->setColor(la + ld + ls);
-
-	/* Create an orbit camera to look at the model */
-	glm::vec3 centriod = MeshList["mesh"]->getCentroid();
-	centriod *= .1;
-	System::MainScene->camera = make_shared<Cameras::SpinTableCamera>(glm::vec3(0.0, -7.0, 5.0), centriod, glm::vec3(0.0,0.0,1.0));
-	System::MainScene->entities->addObject("camera", System::MainScene->camera);
-		
-	/* Create an entity with the provided mesh and model */
-	std::shared_ptr<Entities::Model> redTeapot = make_shared<Model>();
-	redTeapot->transform.SetPosition(-1.5, 0.0, 0.0);
-	redTeapot->transform.SetScale(.1, .1, .1);
-	redTeapot->transform.SetRotation(-3.0, glm::vec3(0.0, 0.0, 1.0));
-	redTeapot->setMesh(MeshList["mesh"]);
-	redTeapot->addMaterial(redSurface);
-	System::MainScene->entities->addObject("redTeapot", redTeapot);
-
-	std::shared_ptr<Entities::Model> greenTeapot = make_shared<Model>();
-	greenTeapot->transform.SetPosition(0.0, -1.5, 0.0);
-	greenTeapot->transform.SetScale(.1, .1, .1);
-	greenTeapot->transform.SetRotation(-2.0, glm::vec3(0.0, 0.0, 1.0));
-	greenTeapot->setMesh(MeshList["mesh"]);
-	greenTeapot->addMaterial(greenSurface);
-	System::MainScene->entities->addObject("greenTeapot", greenTeapot);
-	
-	std::shared_ptr<Entities::Model> blueTeapot = make_shared<Model>();
-	blueTeapot->transform.SetPosition(1.5, 0.0, 0.0);
-	blueTeapot->transform.SetScale(.1, .1, .1);
-	blueTeapot->transform.SetRotation(-0.3, glm::vec3(0.0, 0.0, 1.0));
-	blueTeapot->setMesh(MeshList["mesh"]);
-	blueTeapot->addMaterial(blueSurface);
-	System::MainScene->entities->addObject("blueTeapot", blueTeapot);
-
-	std::shared_ptr<Entities::Model> plane = make_shared<Model>();
-	plane->setMesh(MeshList["plane"]);
-	plane->transform.SetScale(4.0, 4.0, 4.0);
-	plane->addMaterial(planeSurface);
-	System::MainScene->entities->addObject("plane", plane);
-		
-	/* Add a light to the scene */
-	auto light = make_shared<Lights::Light>(la, ld, ls);
-	light->transform.SetPosition(glm::vec3(0.0, -3.0, 3.0));
-	light->transform.SetScale(glm::vec3(0.1, 0.1, 0.1));
-	light->addMaterial(lightSurface);
-	light->setMesh(MeshList["sphere"]);
-	light->updateCallback = &UpdateLight;
-	System::MainScene->entities->addObject("light", light);
-	System::MainScene->LightList.emplace("light", light);
-}
-
-void System::Start() {
-	if (System::quit) return;
-	
-	/* Render on seperate thread */
-	System::RenderThread = new std::thread(System::RenderLoop);
-
-	/* Render on seperate thread */
-	System::UpdateThread = new std::thread(System::UpdateLoop);
-
-	/* Update events on the current thread */
-	System::EventLoop();
-}
-
-void System::Cleanup() {
-	/* Quit */
-	System::quit = true;
-
-	System::RenderThread->join();
-	System::UpdateThread->join();
-
-	delete(System::RenderThread);
-	delete(System::UpdateThread);
-
-	for (auto &mesh : MeshList) { mesh.second->cleanup(); }
-
-	Components::Materials::SurfaceMaterials::UniformColoredSurface::Destroy();
-	Components::Materials::SurfaceMaterials::BlinnSurface::Destroy();
-}
-
-void System::Initialize() {
-	MainScene = make_shared<Scene>(true);
-}
-
-void System::Terminate() {
-	MainScene->cleanup();
-}
-
-int main(int argc, char** argv) {
-	/* Process arguments */
-	Options::ProcessArgs(argc, argv);
-
-	/* Initialize Vulkan */
+void StartDemo3() {
 	VKDK::InitializationParameters vkdkParams = { 1024, 1024, "Project 3 - Shading", false, false, true };
-	if (VKDK::Initialize(vkdkParams) != VK_SUCCESS) System::quit = true;
+	if (VKDK::Initialize(vkdkParams) != VK_SUCCESS) return;
 
-	System::Initialize();
+	PRJ3::SetupComponents();
+	PRJ3::SetupEntities();
+	PRJ3::SetupSystems();
+	S::LaunchThreads();
 
-	/* Setup System Entity Component */
-	System::SetupComponents();
-	System::SetupEntities();
-	System::Start();
-	System::Cleanup();
-
-	/* Terminate */
-	System::Terminate();
-	VKDK::Terminate();	
+	S::JoinThreads();
+	PRJ3::CleanupComponents();
+	VKDK::Terminate();
 }
+
+#ifndef NO_MAIN
+int main() { StartDemo3(); }
+#endif

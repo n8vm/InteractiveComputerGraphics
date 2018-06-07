@@ -4,8 +4,6 @@
 	A Significant portion of this code was taken and modified from https://vulkan-tutorial.com/
 */
 
-#define OPENGL_SOURCES_PATH "./Sources/OpenGL/opengl_sources.txt"
-
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -43,6 +41,7 @@ namespace VKDK {
 		bool windowHidden = false;
 		bool verbose = false;
 		bool vsyncEnabled = false;
+    uint32_t apiVersion = VK_API_VERSION_1_0;
 	};
 	
 	struct QueueFamilyIndices {
@@ -181,14 +180,14 @@ namespace VKDK {
 	extern bool Initialize(InitializationParameters parameters);
 	
 	/* GLFW Initialization */
-	extern void InitWindow();
+	extern void InitGLFWWindow();
 	extern int CreateNewWindow(int width, int height, std::string title, GLFWmonitor *monitor, GLFWwindow *share);
 	extern void MakeContextCurrent(GLFWwindow *window);
 	extern void SetFullScreen(bool fullscreen, uint32_t windowPos[2] = PreviousWindowPos, uint32_t windowSize[2] = PreviousWindowSize);
 	extern void SetWindowHidden(bool hidewindow);
 
 	/* Vulkan Instance Creation */
-	extern void CreateInstance();
+	extern void CreateVulkanInstance();
 	extern bool CheckValidationLayerSupport();
 	extern std::vector<const char*> GetRequiredExtensions();
 
@@ -259,6 +258,15 @@ namespace VKDK {
 	extern VkResult QueuePresent(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore = VK_NULL_HANDLE);
 	extern bool PrepareFrame();
 	extern bool SubmitFrame();
+
+	struct SubmitToGraphicsQueueInfo {
+		std::vector<VkSemaphore> waitSemaphores;
+		VkPipelineStageFlags submitPipelineStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		std::vector<VkCommandBuffer> commandBuffers;
+		std::vector<VkSemaphore> signalSemaphores;
+		VkQueue graphicsQueue;
+	};
+	extern void SubmitToGraphicsQueue(VKDK::SubmitToGraphicsQueueInfo &submitToGraphicsQueueInfo);
 
 	/* Allocates a one time command buffer, and begins recording commands on it. */
 	VkCommandBuffer beginSingleTimeCommands();

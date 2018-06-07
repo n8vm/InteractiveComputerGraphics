@@ -1,0 +1,5 @@
+set(PointLight_SRC
+	${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+	${CMAKE_CURRENT_SOURCE_DIR}/PointLight.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/PointLight.cpp
+	PARENT_SCOPE)

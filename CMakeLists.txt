@@ -26,6 +26,17 @@ endif(MSVC)
 #------------------------------------------------------------
 add_definitions(-DResourcePath="${CMAKE_CURRENT_SOURCE_DIR}/Resources/")
 
+# Force binaries to go to build folder, not subfolders
+set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR} )
+set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR} )
+set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR} )
+foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
+    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
+    set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR} )
+    set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR} )
+    set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR} )
+endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
+
 #------------------------------------------------------------
 # External dependencies
 #------------------------------------------------------------
@@ -46,8 +57,13 @@ include_directories(SYSTEM ${GLI_INCLUDE_DIR})
 find_package(Vulkan REQUIRED)
 include_directories(SYSTEM ${Vulkan_INCLUDE_DIR})
 
+# use Python
+find_package(PythonLibs REQUIRED)
+include_directories(SYSTEM ${PYTHON_INCLUDE_DIRS})
+
 # add libraries to a list for linking
 set(LIBRARIES
+    ${PYTHON_LIBRARIES}
     ${Vulkan_LIBRARY}
     ${GLFW_LIBRARIES}
     ${OPENVR_LIBRARY})
@@ -62,28 +78,36 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Dependencies)
 # EXECUTABLE TARGETS
 #------------------------------------------------------------
 add_executable (PRJ1-Hello-World "${PRJ1_SRC}")
-target_link_libraries (PRJ1-Hello-World ${LIBRARIES} VKDK SEC)
+target_link_libraries (PRJ1-Hello-World ${LIBRARIES} VKDK ECS)
 generate_folder_hierarchy("${PRJ1_SRC}")
 
 add_executable (PRJ2-Transformations "${PRJ2_SRC}")
-target_link_libraries (PRJ2-Transformations ${LIBRARIES} VKDK SEC)
+target_link_libraries (PRJ2-Transformations ${LIBRARIES} VKDK ECS)
 generate_folder_hierarchy("${PRJ2_SRC}")
 
 add_executable (PRJ3-Shading "${PRJ3_SRC}")
-target_link_libraries (PRJ3-Shading ${LIBRARIES} VKDK SEC)
+target_link_libraries (PRJ3-Shading ${LIBRARIES} VKDK ECS)
 generate_folder_hierarchy("${PRJ3_SRC}")
 
 add_executable (PRJ4-Textures "${PRJ4_SRC}")
-target_link_libraries (PRJ4-Textures ${LIBRARIES} VKDK SEC)
+target_link_libraries (PRJ4-Textures ${LIBRARIES} VKDK ECS)
 generate_folder_hierarchy("${PRJ4_SRC}")
 
-add_executable (PRJ5-Render-Buffers "${PRJ5_SRC}")
-target_link_libraries (PRJ5-Render-Buffers ${LIBRARIES} VKDK SEC)
+add_executable (PRJ5-Render-Passes "${PRJ5_SRC}")
+target_link_libraries (PRJ5-Render-Passes ${LIBRARIES} VKDK ECS)
 generate_folder_hierarchy("${PRJ5_SRC}")
 
 add_executable (PRJ6-Environment-Mapping "${PRJ6_SRC}")
-target_link_libraries (PRJ6-Environment-Mapping ${LIBRARIES} VKDK SEC)
+target_link_libraries (PRJ6-Environment-Mapping ${LIBRARIES} VKDK ECS)
 generate_folder_hierarchy("${PRJ6_SRC}")
+
+add_executable (PRJ7-Shadow-Mapping "${PRJ7_SRC}")
+target_link_libraries (PRJ7-Shadow-Mapping ${LIBRARIES} VKDK ECS)
+generate_folder_hierarchy("${PRJ7_SRC}")
+
+add_executable (PRJ8-Voxel-Cone-Tracing "${PRJ8_SRC}")
+target_link_libraries (PRJ8-Voxel-Cone-Tracing ${LIBRARIES} VKDK ECS)
+generate_folder_hierarchy("${PRJ8_SRC}")
 
 #------------------------------------------------------------
 # INSTALL TARGETS

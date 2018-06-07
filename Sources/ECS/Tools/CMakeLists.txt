@@ -1,0 +1,6 @@
+set(Tools_SRC
+	${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+	${CMAKE_CURRENT_SOURCE_DIR}/Color.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/HashCombiner.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/FileReader.hpp
+	PARENT_SCOPE)

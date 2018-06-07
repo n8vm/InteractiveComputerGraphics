@@ -1,113 +1,104 @@
+﻿// ┌──────────────────────────────────────────────────────────────────┐
+// │ Developer : n8vm - Hello World                                   |
+// │   Simple example of how to setup VKDK, Systems, add a component, |
+// |   to clear the screen                                            |
+// └──────────────────────────────────────────────────────────────────┘
+
 #include "vkdk.hpp"
-#include "System/System.hpp"
-#include "glm/glm.hpp"
+#include "ecs.hpp"
 
-glm::vec3 hsvToRgb(glm::vec3 hsv) {
-	glm::vec3 rgb;
-	int i = floorf(hsv[0] * 6.0);
-	float f = hsv[0] * 6 - i;
-	float p = hsv[2] * (1 - hsv[1]);
-	float q = hsv[2] * (1 - f * hsv[1]);
-	float t = hsv[2] * (1 - (1 - f) * hsv[1]);
+namespace ComponentManager = Systems::ComponentManager;
+namespace Math = Components::Math;
 
-	switch (i % 6) {
-	case 0: rgb[0] = hsv[2], rgb[1] = t, rgb[2] = p; break;
-	case 1: rgb[0] = q, rgb[1] = hsv[2], rgb[2] = p; break;
-	case 2: rgb[0] = p, rgb[1] = hsv[2], rgb[2] = t; break;
-	case 3: rgb[0] = p, rgb[1] = q, rgb[2] = hsv[2]; break;
-	case 4: rgb[0] = t, rgb[1] = p, rgb[2] = hsv[2]; break;
-	case 5: rgb[0] = hsv[2], rgb[1] = p, rgb[2] = q; break;
-	}
+namespace PRJ1 {
 
-	return rgb;
-}
-
-void System::EventLoop() {
-	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		glfwPollEvents();
-	}
-}
-
-float x = 0.0;
-glm::vec4 clearColor;
-void System::UpdateLoop() {
-	auto lastTime = glfwGetTime();
-	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		auto currentTime = glfwGetTime();
-		if (currentTime - lastTime > 1.0 / UpdateRate) {
-			x += .001;
-			if (x >= 1.0) x = 0;
-			clearColor = glm::vec4(hsvToRgb(glm::vec3(x, 1.0, 1.0)), 0.0);
-			lastTime = currentTime;
-		}
-	}
-}
-
-void System::RenderLoop() {
-	using namespace VKDK;
-	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		/* Aquire a new image from the swapchain */
-		PrepareFrame();
-		
-		/* Kind of kludgy, but re-record command buffers to update clear color. */
-		System::MainScene->setClearColor(clearColor);
-		System::MainScene->recordRenderPass();
-
-		/* Submit to graphics queue  */
-		Scene::SubmitToGraphicsQueueInfo info;
-		info.commandBuffers = { VKDK::drawCmdBuffers[VKDK::swapIndex] };
-		info.graphicsQueue = VKDK::graphicsQueue;
-		info.signalSemaphores = { VKDK::semaphores.renderComplete };
-		info.waitSemaphores = { VKDK::semaphores.presentComplete };
-		System::MainScene->submitToGraphicsQueue(info);
-
-		/* Submit the frame for presenting. */
-		SubmitFrame();
-	}
-
-	vkDeviceWaitIdle(device);
-}
-
-void System::Start() {
-	if (System::quit) return;
+	void SetupComponents() {
+		/* When setting up components, we always initialize the component manager, which adds a couple
+			placeholder components, like a couple default textures, a default model, etc. */
+		ComponentManager::Initialize();
 	
-	/* Render on seperate thread */
-	System::RenderThread = new std::thread(System::RenderLoop);
+		/* We'll then create a perspective for each Vulkan swapchain framebuffer. */
+		Math::Perspective::Create("My Perspective",
+			VKDK::renderPass, VKDK::drawCmdBuffers, VKDK::swapChainFramebuffers, 
+			VKDK::swapChainExtent.width, VKDK::swapChainExtent.height);
+	}
 
-	/* Render on seperate thread */
-	System::UpdateThread = new std::thread(System::UpdateLoop);
+	void SetupEntities() {
+		// Does nothing in this example. See PRJ2 - Transformations
+	}
 
-	/* Update events on the current thread */
-	System::EventLoop();
+	void SetupSystems() {
+		/* Systems are implemented using lambda functions.
+			In general, we'll always have a render system and an event system. */
+
+		Systems::RenderSystem = []() {
+			bool refreshRequired = false;
+
+			while (!VKDK::ShouldClose() && !Systems::quit) {
+				/* Aquire a new image from the swapchain */
+				refreshRequired |= VKDK::PrepareFrame();
+
+				/* Kind of kludgy, but re-record the render pass each frame to update clear color. */
+				glm::vec4 newColor = glm::vec4(Colors::hsvToRgb(glm::vec3(glfwGetTime() * .1, 1.0, 1.0)), 1.0);
+				ComponentManager::Perspectives["My Perspective"]->recordRenderPass(newColor);
+
+				/* Submit command buffer to graphics queue  */
+				VKDK::SubmitToGraphicsQueueInfo info;
+				info.commandBuffers = { VKDK::drawCmdBuffers[VKDK::swapIndex] };
+				info.graphicsQueue = VKDK::graphicsQueue;
+				info.signalSemaphores = { VKDK::semaphores.renderComplete };
+				info.waitSemaphores = { VKDK::semaphores.presentComplete };
+				VKDK::SubmitToGraphicsQueue(info);
+
+				/* Submit the frame for presenting. */
+				refreshRequired |= VKDK::SubmitFrame();
+
+				/* If something like the screen size changed, recreate the swapchain and refresh the final perspective. */
+				if (refreshRequired) {
+					VKDK::RecreateSwapChain();
+
+					/* Add a perspective to render the swapchain */
+					ComponentManager::Perspectives["My Perspective"]->refresh(VKDK::renderPass, VKDK::drawCmdBuffers, VKDK::swapChainFramebuffers,
+						VKDK::swapChainExtent.width, VKDK::swapChainExtent.height);
+					refreshRequired = false;
+				}
+			}
+			vkDeviceWaitIdle(VKDK::device);
+		};
+
+		Systems::EventSystem = []() {
+			while (!VKDK::ShouldClose() && !Systems::quit) {
+				glfwPollEvents();
+			}
+		};
+
+		/* All systems are done asynchronously, but one system can be ran on the main thread.
+			In this case, we'll run the event system on the main thread. */
+		Systems::currentThreadType = Systems::SystemTypes::Event;
+	}
 }
 
-void System::Cleanup() {
-	/* Quit */
-	System::quit = true;
+void StartDemo1() {
+	/* All these Vulkan demos will look similar to this. */
 
-	System::RenderThread->join();
-	System::UpdateThread->join();
-	
-	delete(System::RenderThread);
-	delete(System::UpdateThread);
+	/* First, I use a namespace called Vulkan Development Kit (VKDK), which can be initialized with the 
+		InitializationParameters struct. VKDK contains a ton of boiler plate code, and loosely follows 
+		Alexander Overvoorde's vulkan tutorials. */
+	VKDK::InitializationParameters vkdkParams = { 1024, 1024, "Project 1 - Hello World", false, false, true };
+	if (VKDK::Initialize(vkdkParams) != VK_SUCCESS) return;
+
+	/* Then, we setup the components, then entities (none here), and then finally the systems. */
+	PRJ1::SetupComponents();
+	PRJ1::SetupEntities();
+	PRJ1::SetupSystems();
+	Systems::LaunchThreads();
+
+	/* Once the systems return, we cleanup. */
+	Systems::JoinThreads();
+	ComponentManager::Cleanup();
+	VKDK::Terminate();	
 }
 
-void System::Initialize() {
-	MainScene = make_shared<Scene>(true);
-}
-
-void System::Terminate() {
-	MainScene->cleanup();
-}
-
-int main() {
-		VKDK::InitializationParameters vkdkParams = { 1024, 1024, "Project 1 - Hello World", false, false, true };
-		if (VKDK::Initialize(vkdkParams) != VK_SUCCESS) System::quit = true;
-
-		System::Initialize();
-		System::Start();
-		System::Terminate();
-		System::Cleanup();
-
-		VKDK::Terminate();	
-}
+#ifndef NO_MAIN
+int main() { StartDemo1(); }
+#endif

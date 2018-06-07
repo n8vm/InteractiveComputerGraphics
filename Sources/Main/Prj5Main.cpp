@@ -1,299 +1,304 @@
-#include "Options/Options.h"
-#include "System/System.hpp"
+﻿// ┌──────────────────────────────────────────────────────────────────┐
+// │ Developer : n8vm - Render-Passes                                 |
+// │   Example which uses separate render passes to render to texture |
+// └──────────────────────────────────────────────────────────────────┘
+
+#include "vkdk.hpp"
 #include "glm/glm.hpp"
+#include "ecs.hpp"
 
-#include "Entities/Model/Model.hpp"
-#include "Entities/Cameras/SpinTableCamera.hpp"
-#include "Entities/Cameras/PerspectiveCamera.hpp"
-#include "Entities/Lights/Light.hpp"
+namespace E = Entities;
+namespace C = Components;
+namespace S = Systems;
 
-#include "Components/Meshes/Mesh.hpp"
+namespace CM = Systems::ComponentManager;
+namespace SG = Systems::SceneGraph;
 
-#include "Components/Textures/Texture2D.hpp"
+namespace Math = Components::Math;
+namespace Lights = Components::Lights;
+namespace Materials = Components::Materials::Standard;
+namespace Meshes = Components::Meshes;
+namespace Cameras = Entities::Cameras;
+namespace Textures = Components::Textures;
 
-using namespace std;
+namespace PRJ5 {
+	void SetupComponents() {
+		CM::Initialize();
 
-void System::RenderLoop() {
-	using namespace VKDK;
-	auto lastTime = glfwGetTime();
+		auto teapot = Meshes::OBJMesh::Create("Teapot", ResourcePath "Teapot/teapot.obj");
+		glm::vec3 centroid = teapot->mesh->getCentroid();
 
-	/* Record the commands required to render the current scene. */
-	System::MainScene->subScenes["SubScene"]->setClearColor(glm::vec4(0.3, 0.3, 0.3, 1.0));
-	System::MainScene->recordRenderPass();
+		/* Creating a perspective with this constructor will render the scene onto a texture with the same name.
+			In this case, a set of four Texture2D's will be added to the component manager, each of a 512 by 512 resolution
+		*/
+		auto P1_1 = Math::Perspective::Create("P1_1", 512, 512);
+		auto P1_2 = Math::Perspective::Create("P1_2", 512, 512);
+		auto P1_3 = Math::Perspective::Create("P1_3", 512, 512);
+		auto P1_4 = Math::Perspective::Create("P1_4", 512, 512);
 
-	int oldWidth = VKDK::CurrentWindowSize[0], oldHeight = VKDK::CurrentWindowSize[1];
-	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		auto currentTime = glfwGetTime();
-		/* Update Camera Buffer */
-		System::MainScene->updateCameraUBO();
+		/* Setup perspectives for each texture */
+		glm::mat4 view = glm::lookAt(glm::vec3(0.0, -30.0, 12.0), centroid, glm::vec3(0.0, 0.0, 1.0));
+		glm::mat4 proj = glm::perspective(glm::radians(90.f), 1.f, 0.01f, 1000.0f);
+		P1_1->views[0] = P1_2->views[0] = P1_3->views[0] = P1_4->views[0] = view;
+		P1_1->projections[0] = P1_2->projections[0] = P1_3->projections[0] = P1_4->projections[0] = proj;
 
-		/* Aquire a new image from the swapchain */
-		if (PrepareFrame() == true) System::MainScene->recordRenderPass();
+		/* Perspective for the final render pass  */
+		auto P2_1 = Math::Perspective::Create("P2_1",
+			VKDK::renderPass, VKDK::drawCmdBuffers, VKDK::swapChainFramebuffers,
+			VKDK::swapChainExtent.width, VKDK::swapChainExtent.height);
 
-		/* Submit offscreen pass to graphics queue */
-		Scene::SubmitToGraphicsQueueInfo offscreenPassInfo;
-		offscreenPassInfo.graphicsQueue = VKDK::graphicsQueue;
-		offscreenPassInfo.commandBuffers = { MainScene->subScenes["SubScene"]->getCommandBuffer() };
-		offscreenPassInfo.waitSemaphores = { VKDK::semaphores.presentComplete };
-		offscreenPassInfo.signalSemaphores = { VKDK::semaphores.offscreenComplete };
-		System::MainScene->submitToGraphicsQueue(offscreenPassInfo);
+		auto P1_1Key = PipelineKey(P1_1->renderpass, 0, 0);
+		auto P1_2Key = PipelineKey(P1_2->renderpass, 0, 0);
+		auto P1_3Key = PipelineKey(P1_3->renderpass, 0, 0);
+		auto P1_4Key = PipelineKey(P1_4->renderpass, 0, 0);
+		auto P2_1Key = PipelineKey(P2_1->renderpass, 0, 0);
 
-		/* Submit final pass to graphics queue  */
-		Scene::SubmitToGraphicsQueueInfo finalPassInfo;
-		finalPassInfo.commandBuffers = { VKDK::drawCmdBuffers[VKDK::swapIndex] };
-		finalPassInfo.graphicsQueue = VKDK::graphicsQueue;
-		finalPassInfo.waitSemaphores = { VKDK::semaphores.offscreenComplete };
-		finalPassInfo.signalSemaphores = { VKDK::semaphores.renderComplete };
-		System::MainScene->submitToGraphicsQueue(finalPassInfo);
+		/* Make the first texture a point list, and the second a list of lines. */
+		auto P1_1Params = PipelineParameters::Create(P1_1Key);
+		auto P1_2Params = PipelineParameters::Create(P1_2Key);
+		auto P1_3Params = PipelineParameters::Create(P1_3Key);
+		auto P1_4Params = PipelineParameters::Create(P1_4Key);
+		auto P2_1Params = PipelineParameters::Create(P2_1Key);
+		P1_1Params->inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+		P1_2Params->rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
+		P2_1Params->rasterizer.cullMode = VK_CULL_MODE_NONE;
 
-		/* Submit the frame for presenting. */
-		if (SubmitFrame() == true) System::MainScene->recordRenderPass();
+		/* Add a light */
+		Lights::PointLights::Create("Light");
 
-		std::cout << "\r Framerate: " << currentTime - lastTime;
-		lastTime = currentTime;
+		/* Initialize Materials */
+		Materials::Blinn::Initialize(25);
+		Materials::UniformColor::Initialize(25);
+
+		auto p1mat = Materials::UniformColor::Create("P1Mat", P2_1Key);
+		auto p2mat = Materials::UniformColor::Create("P2Mat", P2_1Key);
+		auto p3mat = Materials::UniformColor::Create("P3Mat", P2_1Key);
+		auto p4mat = Materials::UniformColor::Create("P4Mat", P2_1Key);
+
+		p1mat->useTexture(true); p2mat->useTexture(true); p3mat->useTexture(true); p4mat->useTexture(true);
+		p1mat->setTexture(CM::Textures["P1_1"]);
+		p2mat->setTexture(CM::Textures["P1_2"]);
+		p3mat->setTexture(CM::Textures["P1_3"]);
+		p4mat->setTexture(CM::Textures["P1_4"]);
+
+		Materials::UniformColor::Create("P1TeapotMat", P1_1Key);
+		Materials::UniformColor::Create("P2TeapotMat", P1_2Key);
+		Materials::UniformColor::Create("P3TeapotMat", P1_3Key);
+		Materials::Blinn::Create("P4TeapotMat", P1_4Key);
 	}
-	vkDeviceWaitIdle(device);
-}
 
-void System::EventLoop() {
-	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		glfwPollEvents();
+	void SetupEntities() {
+		/* Create an orbit camera to look at the planes */
+		auto camera = Cameras::SpinTableCamera::Create("Camera",
+			glm::vec3(0.0, 0.0, 5.0), glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0, 1.0, 0.0));
+		camera->addComponent(CM::Perspectives["P2_1"]);
+
+		/* Plane Cameras */
+		auto TLCamera = E::Entity::Create("TLCamera");
+		TLCamera->addComponent(CM::Perspectives["P1_1"]);
+
+		auto TRCamera = E::Entity::Create("TRCamera");
+		TRCamera->addComponent(CM::Perspectives["P1_2"]);
+
+		auto BLCamera = E::Entity::Create("BLCamera");
+		BLCamera->addComponent(CM::Perspectives["P1_3"]);
+
+		auto BRCamera = E::Entity::Create("BRCamera");
+		BRCamera->addComponent(CM::Perspectives["P1_4"]);
+
+		/* Create four planes, which will show the results of the first renderpass */
+		auto TL = E::Entity::Create("TopLeft");
+		auto TR = E::Entity::Create("TopRight");
+		auto BL = E::Entity::Create("BottomLeft");
+		auto BR = E::Entity::Create("BottomRight");
+
+		TL->transform->SetPosition(glm::vec3(-1.1, 1.1, 0.0));
+		TR->transform->SetPosition(glm::vec3(1.1, 1.1, 0.0));
+		BL->transform->SetPosition(glm::vec3(-1.1, -1.1, 0.0));
+		BR->transform->SetPosition(glm::vec3(1.1, -1.1, 0.0));
+
+		/* Add material & mesh */
+		TL->addComponent(CM::Materials["P1Mat"], CM::Meshes["Plane"]);
+		TR->addComponent(CM::Materials["P2Mat"], CM::Meshes["Plane"]);
+		BL->addComponent(CM::Materials["P3Mat"], CM::Meshes["Plane"]);
+		BR->addComponent(CM::Materials["P4Mat"], CM::Meshes["Plane"]);
+
+		TL->callbacks->update = [](std::shared_ptr<E::Entity> panel) {
+			panel->transform->SetRotation(sinf(-glfwGetTime() + .1), glm::vec3(.5, .5, 0.0));	};
+		TR->callbacks->update = [](std::shared_ptr<E::Entity> panel) {
+			panel->transform->SetRotation(sinf(-glfwGetTime() + .4), glm::vec3(.5, -.5, 0.0));	};
+		BL->callbacks->update = [](std::shared_ptr<E::Entity> panel) {
+			panel->transform->SetRotation(sinf(glfwGetTime() + .2), glm::vec3(.5, -.5, 0.0));	};
+		BR->callbacks->update = [](std::shared_ptr<E::Entity> panel) {
+			panel->transform->SetRotation(sinf(glfwGetTime() + .3), glm::vec3(.5, .5, 0.0));	};
+
+		/* Create a teapot */
+		auto Teapot = E::Entity::Create("Teapot");
+		Teapot->addComponent(CM::Meshes["Teapot"]);
+
+		/* add a material for each render pass where the teapot will be rendered.*/
+		Teapot->addComponent(CM::Materials["P1TeapotMat"], CM::Materials["P2TeapotMat"], CM::Materials["P3TeapotMat"], CM::Materials["P4TeapotMat"]);
+
+		Teapot->callbacks->update = [](std::shared_ptr<E::Entity> teapot) {
+			/* Move teapot */
+			teapot->transform->AddRotation(glm::angleAxis(0.01f, glm::vec3(0.0, 0.0, 1.0)));
+
+			/* Change material color */
+			auto P1Mat = CM::Materials["P1TeapotMat"];
+			auto P2Mat = CM::Materials["P2TeapotMat"];
+			auto P3Mat = CM::Materials["P3TeapotMat"];
+			auto P4Mat = CM::Materials["P4TeapotMat"];
+			auto UC1 = std::dynamic_pointer_cast<Materials::UniformColor>(P1Mat->material);
+			auto UC2 = std::dynamic_pointer_cast<Materials::UniformColor>(P2Mat->material);
+			auto UC3 = std::dynamic_pointer_cast<Materials::UniformColor>(P3Mat->material);
+			auto UC4 = std::dynamic_pointer_cast<Materials::Blinn>(P4Mat->material);
+			glm::vec4 newColor = glm::vec4(Colors::hsvToRgb(glm::vec3(glfwGetTime() * .1, 1.0, 1.0)), 1.0);
+			UC1->setColor(newColor);
+			UC2->setColor(newColor);
+			UC3->setColor(newColor);
+			UC4->setColor(newColor, Colors::white, Colors::black);
+		};
+
+		//Create a light for the blinn teapot
+		auto light = E::Entity::Create("Light");
+		light->addComponent(CM::Lights["Light"]);
+		light->transform->SetPosition(glm::vec3(0.0, -30.0, 8.0));
+	}
+
+	void SetupSystems() {
+		S::RenderSystem = []() {
+			bool refreshRequired = false;
+			auto lastTime = glfwGetTime();
+
+			/* Take the perspective from the camera */
+			auto P1_1 = CM::Perspectives["P1_1"];
+			auto P1_2 = CM::Perspectives["P1_2"];
+			auto P1_3 = CM::Perspectives["P1_3"];
+			auto P1_4 = CM::Perspectives["P1_4"];
+			auto P2_1 = CM::Perspectives["P2_1"];
+
+			/* Record the commands required to render the current scene. */
+			P1_1->recordRenderPass(glm::vec4(1.0, 1.0, 1.0, 1.0));
+			P1_2->recordRenderPass(glm::vec4(1.0, 1.0, 1.0, 1.0));
+			P1_3->recordRenderPass(glm::vec4(1.0, 1.0, 1.0, 1.0));
+			P1_4->recordRenderPass(glm::vec4(1.0, 1.0, 1.0, 1.0));
+			P2_1->recordRenderPass(glm::vec4(0.0, 0.0, 0.0, 0.0));
+
+			while (!VKDK::ShouldClose()) {
+				auto currentTime = glfwGetTime();
+
+				/* Upload Perspective UBOs before render */
+				for (auto pair : CM::Perspectives) {
+					pair.second->uploadUBO();
+				}
+
+				/* Aquire a new image from the swapchain */
+				refreshRequired |= VKDK::PrepareFrame();
+
+				/* Submit offscreen pass to graphics queue */
+				VKDK::SubmitToGraphicsQueueInfo offscreenPassInfo;
+				offscreenPassInfo.graphicsQueue = VKDK::graphicsQueue;
+				offscreenPassInfo.commandBuffers = {
+					P1_1->commandBuffers[0],
+			P1_2->commandBuffers[0],
+			P1_3->commandBuffers[0],
+			P1_4->commandBuffers[0]
+				};
+				offscreenPassInfo.waitSemaphores = { VKDK::semaphores.presentComplete };
+				offscreenPassInfo.signalSemaphores = { VKDK::semaphores.offscreenComplete };
+				VKDK::SubmitToGraphicsQueue(offscreenPassInfo);
+
+				/* Submit final pass to graphics queue  */
+				VKDK::SubmitToGraphicsQueueInfo finalPassInfo;
+				finalPassInfo.commandBuffers = { VKDK::drawCmdBuffers[VKDK::swapIndex] };
+				finalPassInfo.graphicsQueue = VKDK::graphicsQueue;
+				finalPassInfo.waitSemaphores = { VKDK::semaphores.offscreenComplete };
+				finalPassInfo.signalSemaphores = { VKDK::semaphores.renderComplete };
+				VKDK::SubmitToGraphicsQueue(finalPassInfo);
+
+				/* Submit the frame for presenting. */
+				refreshRequired |= VKDK::SubmitFrame();
+				if (refreshRequired) {
+					VKDK::RecreateSwapChain();
+
+					/* Add a perspective to render the swapchain */
+					P2_1->refresh(VKDK::renderPass, VKDK::drawCmdBuffers, VKDK::swapChainFramebuffers,
+						VKDK::swapChainExtent.width, VKDK::swapChainExtent.height);
+
+					P2_1->recordRenderPass(glm::vec4(0.0, 0.0, 0.0, 0.0));
+					refreshRequired = false;
+				}
+				std::cout << "\r Framerate: " << currentTime - lastTime;
+				lastTime = currentTime;
+			}
+			vkDeviceWaitIdle(VKDK::device);
+		};
+
+		S::EventSystem = []() {
+			while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
+				glfwPollEvents();
+			}
+		};
+
+		S::UpdateSystem = []() {
+			auto lastTime = glfwGetTime();
+			while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
+				auto currentTime = glfwGetTime();
+				if (currentTime - lastTime > 1.0 / S::UpdateRate) {
+					/* Update Entities */
+					for (auto pair : SG::Entities) {
+						if (pair.second->callbacks->update) {
+							pair.second->callbacks->update(pair.second);
+						}
+					}
+
+					/* Upload Transform UBOs */
+					for (auto pair : SG::Entities) {
+						glm::mat4 worldToLocal = pair.second->getWorldToLocalMatrix();
+						glm::mat4 localToWorld = glm::inverse(worldToLocal);
+						pair.second->transform->uploadUBO(worldToLocal, localToWorld);
+					}
+
+					/* Upload Material UBOs */
+					for (auto pair : CM::Materials) {
+						pair.second->material->uploadUBO();
+					}
+
+					/* Upload Point Light UBO */
+					Lights::PointLights::UploadUBO();
+
+					lastTime = currentTime;
+				}
+			}
+		};
+
+		S::currentThreadType = Systems::SystemTypes::Event;
+	}
+
+	void CleanupComponents() {
+		/* Cleanup components */
+		CM::Cleanup();
+
+		/* Destroy the requested material pipelines */
+		Materials::Blinn::Destroy();
+		Materials::UniformColor::Destroy();
 	}
 }
 
-void System::UpdateLoop() {
-	auto lastTime = glfwGetTime();
-	while (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) != GLFW_PRESS && !glfwWindowShouldClose(VKDK::DefaultWindow)) {
-		auto currentTime = glfwGetTime();
-		if (currentTime - lastTime > 1.0 / UpdateRate) {
-			System::MainScene->update();
-			lastTime = currentTime;
-		}
-	}
-}
+void StartDemo5() {
+	VKDK::InitializationParameters vkdkParams = { 1024, 1024, "Project 5 - Render Passes", false, false, true };
+	if (VKDK::Initialize(vkdkParams) != VK_SUCCESS) return;
 
-void System::SetupComponents() {
-	using namespace Components;
-	using namespace Materials;
-	using namespace std;
+	PRJ5::SetupComponents();
+	PRJ5::SetupEntities();
+	PRJ5::SetupSystems();
+	S::LaunchThreads();
 
-	PipelineParameters firstPipelineParameters = {};
-	firstPipelineParameters.renderPass = MainScene->subScenes["SubScene"]->getRenderPass();
-
-	PipelineParameters finalPipelineParameters = {};
-	finalPipelineParameters.renderPass = MainScene->getRenderPass();
-
-	/* Initialize Materials */
-	Materials::SurfaceMaterials::UniformColoredSurface::Initialize(2, { firstPipelineParameters, finalPipelineParameters });
-	Materials::SurfaceMaterials::TexturedBlinnSurface::Initialize(5, { firstPipelineParameters, finalPipelineParameters });
-
-	/* Load a test texture */
-	TextureList["ChickenTexture"] = make_shared<Textures::Texture2D>(ResourcePath "Chicken/ChickenTexture.ktx");
-	TextureList["ChickenTexture_s"] = make_shared<Textures::Texture2D>(ResourcePath "Chicken/ChickenTexture_s.ktx");
-	TextureList["GrassTexture"] = make_shared<Textures::Texture2D>(ResourcePath "Chicken/grass.ktx");
-
-	/* Load the model (by default, a teapot) */
-	MeshList["Body"] = make_shared<Meshes::OBJMesh>(ResourcePath "Chicken/Chicken.obj");
-	MeshList["Eyes"] = make_shared<Meshes::OBJMesh>(ResourcePath "Chicken/Eyes.obj");
-	MeshList["plane"] = make_shared<Meshes::Plane>();
-	MeshList["sphere"] = make_shared<Meshes::Sphere>();
-}
-
-double lastSubsceneX, lastSubsceneY, subsceneX, subsceneY;
-void UpdateSubSceneLight(Entities::Entity *light) {
-	glfwGetCursorPos(VKDK::DefaultWindow, &subsceneX, &subsceneY);
-	if (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_ALT) && (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_RIGHT_CONTROL) || glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_CONTROL))) {
-		if (!glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_ALT)) return;
-		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.up, subsceneX - lastSubsceneX);
-		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.right, subsceneY - lastSubsceneY);
-	}
-	else {
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), .2f);
-	}
-	lastSubsceneX = subsceneX;
-	lastSubsceneY = subsceneY;
-}
-
-double lastX, lastY, X, Y;
-void UpdateLight(Entities::Entity *light) {
-
-	glfwGetCursorPos(VKDK::DefaultWindow, &X, &Y);
-	if (!glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_ALT) && (glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_RIGHT_CONTROL) || glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_LEFT_CONTROL))) {
-		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.up, X - lastX);
-		light->transform.RotateAround(glm::vec3(0.0), System::MainScene->camera->transform.right, Y - lastY);
-	}
-	else {
-		light->transform.RotateAround(glm::vec3(0.0), glm::vec3(0.0, 0.0, 1.0), .2f);
-	}
-	lastX = X;
-	lastY = Y;
-}
-
-void System::SetupEntities() {
-	using namespace std;
-	using namespace Entities;
-	using namespace Components::Materials;
-
-	/* Light colors */
-	glm::vec4 la = glm::vec4(.1, .1, .1, 1.0);
-	glm::vec4 ld = glm::vec4(.8, .8, .8, 1.0);
-	glm::vec4 ls = glm::vec4(.8, .8, .8, 1.0);
-
-	/* ---------------------------
-		MAIN SCENE
-	-----------------------------*/
-
-	/* Create an orbit camera to look at the plane */
-	MainScene->camera = make_shared<Cameras::SpinTableCamera>(glm::vec3(0.0, -5.0, 0.0), glm::vec3(0.0,0.0,0.0), glm::vec3(0.0, 0.0, 1.0));
-	MainScene->entities->addObject("camera", MainScene->camera);
-	
-	/* Front Plane */
-	auto SubSceneMaterial1 = make_shared<SurfaceMaterials::TexturedBlinnSurface>(MainScene, TextureList["SubSceneTexture"]);
-	SubSceneMaterial1->setColor(glm::vec4(1.0, 1.0, 1.0, 1.0), glm::vec4(.8, .8, .8, 1.0), glm::vec4(.0, .0, .0, 0.0));
-	std::shared_ptr<Entities::Model> FrontPlane = make_shared<Model>();
-	FrontPlane->transform.SetScale(1.0, 1.0, 1.0);
-	FrontPlane->transform.SetRotation(3.14/2.0, glm::vec3(1.0, 0.0, 0.0));
-	FrontPlane->setMesh(MeshList["plane"]);
-	FrontPlane->addMaterial(SubSceneMaterial1);
-	MainScene->entities->addObject("FrontPlane", FrontPlane);
-
-	/* Back Plane */
-	auto SubSceneMaterial2 = make_shared<SurfaceMaterials::TexturedBlinnSurface>(MainScene, TextureList["SubSceneTexture"]);
-	SubSceneMaterial2->setColor(glm::vec4(1.0, 1.0, 1.0, 1.0), glm::vec4(.8, .8, .8, 1.0), glm::vec4(.0, .0, .0, 0.0));
-	std::shared_ptr<Entities::Model> BackPlane = make_shared<Model>();
-	BackPlane->transform.SetPosition(0.0, .01, 0.0);
-	BackPlane->transform.SetScale(1.0, 1.0, 1.0);
-	BackPlane->transform.SetRotation(3.14 / 2.0, glm::vec3(1.0, 0.0, 0.0));
-	BackPlane->transform.AddRotation(3.14, glm::vec3(0.0, 1.0, 0.0));
-	BackPlane->setMesh(MeshList["plane"]);
-	BackPlane->addMaterial(SubSceneMaterial2);
-	MainScene->entities->addObject("BackPlane", BackPlane);
-	
-	/* Light */
-	auto mainLightSurface = make_shared<SurfaceMaterials::UniformColoredSurface>(MainScene);
-	mainLightSurface->setColor(la + ld + ls);
-	auto MainSceneLight = make_shared<Lights::Light>(la, ld, ls);
-	MainSceneLight->transform.SetPosition(glm::vec3(0.0, -1.5, 0.0));
-	MainSceneLight->transform.SetScale(glm::vec3(0.1, 0.1, 0.1));
-	MainSceneLight->addMaterial(mainLightSurface);
-	MainSceneLight->setMesh(MeshList["sphere"]);
-	MainSceneLight->updateCallback = &UpdateLight;
-	MainScene->entities->addObject("light", MainSceneLight);
-	MainScene->LightList.emplace("light", MainSceneLight);
-
-	/* ---------------------------
-		SUB SCENE
-	-----------------------------*/
-	std::shared_ptr<Scene> SubScene = MainScene->subScenes["SubScene"];
-
-	/* Create an orbit camera to look at the model */
-	glm::vec3 centroid = MeshList["Body"]->getCentroid();
-	centroid *= .2;
-	SubScene->camera = make_shared<Cameras::SpinTableCamera>(glm::vec3(3.0, -5.0, 3.0), centroid, glm::vec3(0.0, 0.0, 1.0), true);
-	SubScene->entities->addObject("camera", SubScene->camera);
-
-	/* Floor */
-	auto FloorMaterial = make_shared<SurfaceMaterials::TexturedBlinnSurface>(SubScene, TextureList["GrassTexture"]);
-	FloorMaterial->setColor(glm::vec4(1.0, 1.0, 1.0, 1.0), glm::vec4(.8, .8, .8, 1.0), glm::vec4(.0, .0, .0, 0.0));
-	std::shared_ptr<Entities::Model> Floor = make_shared<Model>();
-	Floor->transform.SetScale(5.0, 5.0, 5.0);
-	Floor->setMesh(MeshList["plane"]);
-	Floor->addMaterial(FloorMaterial);
-	SubScene->entities->addObject("Floor", Floor);
-
-	/* Chicken Body */
-	auto chickenMaterial = make_shared<SurfaceMaterials::TexturedBlinnSurface>(SubScene, TextureList["ChickenTexture"], TextureList["ChickenTexture_s"]);
-	std::shared_ptr<Entities::Model> Body = make_shared<Model>();
-	Body->transform.SetScale(.2, .2, .2);
-	Body->setMesh(MeshList["Body"]);
-	Body->addMaterial(chickenMaterial);
-	SubScene->entities->addObject("Base", Body);
-	
-	/* Chicken Eyes */
-	auto eyeMaterial = make_shared<SurfaceMaterials::TexturedBlinnSurface>(SubScene, TextureList["ChickenTexture"]);
-	std::shared_ptr<Entities::Model> Eyes = make_shared<Model>();
-	Eyes->transform.SetScale(.2, .2, .2);
-	Eyes->setMesh(MeshList["Eyes"]);
-	Eyes->addMaterial(eyeMaterial);
-	SubScene->entities->addObject("Eyes", Eyes);
-
-	/* Subscene light */
-	auto SubLightSurface = make_shared<SurfaceMaterials::UniformColoredSurface>(SubScene);
-	SubLightSurface->setColor(la + ld + ls);
-	auto SubSceneLight = make_shared<Lights::Light>(la, ld, ls);
-	SubSceneLight->transform.SetPosition(glm::vec3(0.0, -3.0, 3.0));
-	SubSceneLight->transform.SetScale(glm::vec3(0.1, 0.1, 0.1));
-	SubSceneLight->addMaterial(SubLightSurface);
-	SubSceneLight->setMesh(MeshList["sphere"]);
-	SubSceneLight->updateCallback = &UpdateSubSceneLight;
-	SubScene->entities->addObject("subscenelight", SubSceneLight);
-	SubScene->LightList.emplace("subscenelight", SubSceneLight);
-}
-
-void System::Start() {
-	if (System::quit) return;
-
-	/* Render on seperate thread */
-	System::RenderThread = new std::thread(System::RenderLoop);
-
-	/* Render on seperate thread */
-	System::UpdateThread = new std::thread(System::UpdateLoop);
-
-	/* Update events on the current thread */
-	System::EventLoop();
-}
-
-void System::Cleanup() {
-	/* Quit */
-	System::quit = true;
-
-	System::RenderThread->join();
-	System::UpdateThread->join();
-
-	delete(System::RenderThread);
-	delete(System::UpdateThread);
-
-	for (auto &mesh : MeshList) { 
-		mesh.second->cleanup(); 
-	}
-	for (auto &tex : TextureList) { 
-		tex.second->cleanup(); 
-	}
-	
-	Components::Materials::SurfaceMaterials::UniformColoredSurface::Destroy();
-	Components::Materials::SurfaceMaterials::TexturedBlinnSurface::Destroy();
-
-	using namespace VKDK;
-}
-
-void System::Initialize() {
-	MainScene = make_shared<Scene>(true);
-
-	/* New: create a sub-scene that we can use as a texture */
-	MainScene->subScenes.emplace("SubScene", make_shared<Scene>(false, "SubSceneTexture", 1024, 1024));
-}
-
-void System::Terminate() {
-	MainScene->cleanup();
-}
-
-int main(int argc, char** argv) {
-	/* Process arguments */
-	Options::ProcessArgs(argc, argv);
-
-	/* Initialize Vulkan */
-	VKDK::InitializationParameters vkdkParams = { 1024, 1024, "Project 5 - Render Buffers", false, false, true };
-	if (VKDK::Initialize(vkdkParams) != VK_SUCCESS) System::quit = true;
-
-	System::Initialize();
-
-	/* Setup System Entity Component */
-	System::SetupComponents();
-	System::SetupEntities();
-	System::Start();
-	System::Cleanup();
-
-	/* Terminate */
-	System::Terminate();
+	S::JoinThreads();
+	PRJ5::CleanupComponents();
 	VKDK::Terminate();
 }
+
+#ifndef NO_MAIN
+int main() { StartDemo5(); }
+#endif

@@ -1,0 +1,5 @@
+set(BlinnMaterials_SRC
+	${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+	${CMAKE_CURRENT_SOURCE_DIR}/Blinn.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Blinn.hpp
+	PARENT_SCOPE)

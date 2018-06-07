@@ -12,9 +12,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
-
 namespace VKDK {
 	/* ------------------------------------------*/
 	/* GLFW FIELDS                               */
@@ -37,58 +34,37 @@ namespace VKDK {
 	};
 
 #ifdef NDEBUG
-	const bool enableValidationLayers = false;
+	const bool enableValidationLayers = true;
 #else
 	const bool enableValidationLayers = true;
 #endif
 	
 	VkDebugReportCallbackEXT callback;
-
 	VkDevice device;
-
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-
 	VkPhysicalDeviceProperties deviceProperties;
-
 	VkPhysicalDeviceFeatures deviceFeatures;
 
 	const std::vector<const char*> deviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-		
 	};
 
 	VkQueue graphicsQueue;
-
-	VkQueue presentQueue;
-	
+	VkQueue presentQueue;	
 	VkCommandPool commandPool;
-
 	VkPipelineStageFlags submitPipelineStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
 	VkSubmitInfo submitInfo;
-
-	std::vector<VkCommandBuffer> drawCmdBuffers;
-	
+	std::vector<VkCommandBuffer> drawCmdBuffers;	
 	VkRenderPass renderPass;
-
 	VkSurfaceKHR surface;
-
 	std::vector<VkFramebuffer> swapChainFramebuffers;
-
 	uint32_t swapIndex = 0;
-
 	VkSwapchainKHR swapChain;
-
-	VkFormat swapChainImageFormat;
-	
-	VkExtent2D swapChainExtent;
-	
-	std::vector<VkImage> swapChainImages;
-	
+	VkFormat swapChainImageFormat;	
+	VkExtent2D swapChainExtent;	
+	std::vector<VkImage> swapChainImages;	
 	std::vector<VkImageView> swapChainImageViews;
-
-	std::atomic_bool prepared = true;
-	
+	std::atomic_bool prepared = true;	
 	SemaphoreStruct semaphores;
 
 	/* Image Views */
@@ -102,7 +78,6 @@ namespace VKDK {
 	VkDeviceMemory textureImageMemory;
 	VkImageView textureImageView;
 	VkSampler textureSampler;
-
 
 	/* ------------------------------------------*/
 	/* FUNCTIONS                                 */
@@ -153,21 +128,24 @@ namespace VKDK {
 	bool Initialize(InitializationParameters parameters) {
 		/* Store the initialization parameters */
 		currentSettings = parameters;
-		CurrentWindowSize[0] = PreviousWindowSize[1] = parameters.initialWindowWidth;
+		CurrentWindowSize[0] = PreviousWindowSize[0] = parameters.initialWindowWidth;
 		CurrentWindowSize[1] = PreviousWindowSize[1] = parameters.initialWindowHeight;
 
-		/* Call initialization/creation functions */
+		/* Call Vulkan initialization/creation functions */
 		try {
-			InitWindow();
-			CreateInstance();
+			InitGLFWWindow();
+			CreateVulkanInstance();
 			SetupDebugCallback();
 			CreateSurface();
+
 			PickPhysicalDevice();
 			CreateLogicalDevice();
+			CreateCommandPools();
+
 			CreateSwapChain();
 			CreateImageViews();
 			CreateGlobalRenderPass();
-			CreateCommandPools();
+
 			CreateDepthResources();
 			CreateFrameBuffers();
 			CreateCommandBuffers();
@@ -175,48 +153,37 @@ namespace VKDK {
 		}
 		catch (const std::runtime_error& e) {
 			std::cerr << e.what() << std::endl;
+#ifndef NDEBUG
+			throw std::runtime_error(e.what());
+#endif
 			return VK_ERROR_INITIALIZATION_FAILED;
 		}
 		return VK_SUCCESS;
 	}
 
-	void InitWindow() {
+	void InitGLFWWindow() {
 		print("Initializing Window");
 		if (!glfwInit()) {
-			print("GLFW failed to initialize!", true);
+			throw std::runtime_error("GLFW failed to initialize!");
 		}
 		glfwSetErrorCallback(ErrorCallback);
-
 
 		GLFWmonitor *monitor;
 		monitor = NULL;
 
 		DefaultMonitor = glfwGetPrimaryMonitor();
-		CreateNewWindow(CurrentWindowSize[0], CurrentWindowSize[1], currentSettings.windowTitle, NULL, NULL);
 		
-		SetFullScreen(currentSettings.fullScreenActive, CurrentWindowPos, CurrentWindowSize);
-		SetWindowHidden(currentSettings.windowHidden);
-	}
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+		DefaultWindow = glfwCreateWindow(CurrentWindowSize[0], CurrentWindowSize[1], currentSettings.windowTitle.c_str(), monitor, NULL);
+		glfwSetWindowSizeCallback(DefaultWindow, OnWindowResized);
 
-	std::string getFileName(const std::string& s) {
-		using namespace std;
-		char sep = '/';
-
-		/* cmake
-		#ifdef _WIN32
-		sep = '\\';
-		#endif*/
-
-		size_t i = s.rfind(sep, s.length());
-		if (i != std::string::npos) {
-			string fullname = s.substr(i + 1, s.length() - i);
-			size_t lastindex = fullname.find_last_of(".");
-			string rawname = fullname.substr(0, lastindex);
-
-			return(rawname);
+		if (!DefaultWindow) {
+			throw std::runtime_error("Failed to create default GLFW window");
 		}
 
-		return("");
+		SetFullScreen(currentSettings.fullScreenActive, CurrentWindowPos, CurrentWindowSize);
+		SetWindowHidden(currentSettings.windowHidden);
 	}
 
 	void Terminate() {
@@ -241,30 +208,14 @@ namespace VKDK {
 		glfwTerminate();
 	}
 
-	int CreateNewWindow(int width, int height, std::string title, GLFWmonitor *monitor, GLFWwindow *share) {
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-		DefaultWindow = glfwCreateWindow(width, height, title.c_str(), monitor, share);
-		glfwSetWindowSizeCallback(DefaultWindow, OnWindowResized);
-
-		if (!DefaultWindow) {
-			return -1;
-		}
-		return 0;
-	}
-
 	void OnWindowResized(GLFWwindow* window, int width, int height) {
 		if (width == 0 || height == 0) return;
-
-//		RecreateSwapChain();
-	}
-
-	void MakeContextCurrent(GLFWwindow *window) {
-		glfwMakeContextCurrent(window);
+		CurrentWindowSize[0] = width;
+		CurrentWindowSize[1] = height;
 	}
 
 	bool ShouldClose() {
-		return glfwWindowShouldClose(DefaultWindow);
+		return glfwWindowShouldClose(DefaultWindow) || glfwGetKey(VKDK::DefaultWindow, GLFW_KEY_ESCAPE) == GLFW_PRESS;
 	}
 
 	void SetFullScreen(bool fullscreen, uint32_t windowPos[2], uint32_t windowSize[2]) {
@@ -313,17 +264,17 @@ namespace VKDK {
 		}
 	}
 
-	void CreateInstance() {
+	void CreateVulkanInstance() {
 		print("Creating Vulkan Instance");
-
+    
 		/* Optional initialization struct */
 		VkApplicationInfo appInfo = {};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 		appInfo.pApplicationName = currentSettings.windowTitle.c_str();
-		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+		appInfo.applicationVersion = currentSettings.apiVersion;
 		appInfo.pEngineName = "No Engine";
-		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.apiVersion = VK_API_VERSION_1_0;
+		appInfo.engineVersion = currentSettings.apiVersion;
+		appInfo.apiVersion = currentSettings.apiVersion;
 	
 		/* Required initialization struct */
 		/* Specifies global extensions and validation layers we'd like to use */
@@ -657,7 +608,6 @@ namespace VKDK {
 		*/
 		vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
 		vkGetDeviceQueue(device, indices.presentFamily, 0, &presentQueue);
-
 	}
 
 	/* Window Surface */
@@ -905,7 +855,6 @@ namespace VKDK {
 
 		return imageView;
 	}
-
 
 	void CreateImageViews() {
 		print("Creating Image Views");
@@ -1521,6 +1470,8 @@ namespace VKDK {
 	}
 
 	/**
+		STOLEN FROM SASCHA WILLIAMS
+
 	* Acquires the next image in the swap chain
 	*
 	* @param presentCompleteSemaphore (Optional) Semaphore that is signaled when the image is ready for use
@@ -1537,18 +1488,9 @@ namespace VKDK {
 		return vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), presentCompleteSemaphore, (VkFence)nullptr, imageIndex);
 	}
 
-
-	//uint32_t VKDK::AquireNewFrameBuffer() {
-	//	/* Aquire an image from the swap chain */
-	//	VkResult result = vkAcquireNextImageKHR(VKDK::device, VKDK::swapChain, std::numeric_limits<uint64_t>::max(), semaphores.presentComplete, VK_NULL_HANDLE, &framebufferIndex);
-
-	//	/* Check if the swap chain was optimized, don't render this frame if it did. */
-	//	if (OptimizeSwapchain(result)) return -1;
-	//	
-	//	return framebufferIndex;
-	//}
-
 	/**
+		STOLEN FROM SASCHA WILLIAMS
+
 	* Queue an image for presentation
 	*
 	* @param queue Presentation queue for presenting the image
@@ -1578,16 +1520,33 @@ namespace VKDK {
 		VkResult err = AcquireNextImage(semaphores.presentComplete, &swapIndex);
 
 		// Recreate the swapchain if it's no longer compatible with the surface (OUT_OF_DATE) or no longer optimal for presentation (SUBOPTIMAL)
-		if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)) {
-
-			//windowResize();
-			RecreateSwapChain();
-			std::cout << "Recreating swapchain" << std::endl;
+		if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR) 
+			|| VKDK::PreviousWindowSize[0] != VKDK::CurrentWindowSize[0]
+			|| VKDK::PreviousWindowSize[1] != VKDK::CurrentWindowSize[1]) {
+			PreviousWindowSize[0] = CurrentWindowSize[0];
+			PreviousWindowSize[1] = CurrentWindowSize[1];
 			return true;
 		}
 		else {
 			VK_CHECK_RESULT(err);
 			return false;
+		}
+	}
+
+	void VKDK::SubmitToGraphicsQueue(VKDK::SubmitToGraphicsQueueInfo &submitToGraphicsQueueInfo) {
+		/* Submit command buffer to graphics queue for rendering */
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.waitSemaphoreCount = submitToGraphicsQueueInfo.waitSemaphores.size();
+		submitInfo.pWaitSemaphores = submitToGraphicsQueueInfo.waitSemaphores.data();
+		submitInfo.pWaitDstStageMask = &submitToGraphicsQueueInfo.submitPipelineStages;
+		submitInfo.commandBufferCount = submitToGraphicsQueueInfo.commandBuffers.size();
+		submitInfo.pCommandBuffers = submitToGraphicsQueueInfo.commandBuffers.data();
+		submitInfo.signalSemaphoreCount = submitToGraphicsQueueInfo.signalSemaphores.size();
+		submitInfo.pSignalSemaphores = submitToGraphicsQueueInfo.signalSemaphores.data();
+
+		if (vkQueueSubmit(submitToGraphicsQueueInfo.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
+			throw std::runtime_error("failed to submit draw command buffer!");
 		}
 	}
 
@@ -1624,8 +1583,11 @@ namespace VKDK {
 		//	submitInfo.pSignalSemaphores = &semaphores.renderComplete;
 		//}
 		VkResult err = QueuePresent(presentQueue, swapIndex, submitOverlay ? semaphores.overlayComplete : semaphores.renderComplete);
-		if (err != VK_SUCCESS) {
-			RecreateSwapChain();
+		if (err != VK_SUCCESS 
+			|| VKDK::PreviousWindowSize[0] != VKDK::CurrentWindowSize[0] 
+			|| VKDK::PreviousWindowSize[1] != VKDK::CurrentWindowSize[1]) {
+			PreviousWindowSize[0] = CurrentWindowSize[0];
+			PreviousWindowSize[1] = CurrentWindowSize[1];
 			return true;
 		}
 		else {
@@ -1633,60 +1595,7 @@ namespace VKDK {
 			return false;
 		}
 	}
-
-	//void DrawFrame() {		
-	//	VkSubmitInfo submitInfo = {};
-	//	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-	//	VkSemaphore waitSemaphores[] = { VKDK::semaphores.presentComplete };
-	//	submitInfo.waitSemaphoreCount = 1;
-	//	submitInfo.pWaitSemaphores = waitSemaphores;
-	//	submitInfo.pWaitDstStageMask = &submitPipelineStages;
-
-	//	submitInfo.commandBufferCount = 1;
-	//	submitInfo.pCommandBuffers = &drawCmdBuffers[swapIndex];
-
-	//	VkSemaphore signalSemaphores[] = { VKDK::semaphores.renderComplete };
-	//	submitInfo.signalSemaphoreCount = 1;
-	//	submitInfo.pSignalSemaphores = signalSemaphores;
-
-	//	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
-	//		throw std::runtime_error("failed to submit draw command buffer!");
-	//	}
-
-	//	//VkSubpassDependency dependency = {};
-	//	//dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	//	//dependency.dstSubpass = 0;
-
-	//	//dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	//	//dependency.srcAccessMask = 0;
-
-	//	//dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	//	//dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-	//	//VkRenderPassCreateInfo renderPassInfo = {};
-	//	//renderPassInfo.dependencyCount = 1;
-	//	//renderPassInfo.pDependencies = &dependency;
-
-	//	VkPresentInfoKHR presentInfo = {};
-	//	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
-	//	presentInfo.waitSemaphoreCount = 1;
-	//	presentInfo.pWaitSemaphores = signalSemaphores;
-
-	//	VkSwapchainKHR swapChains[] = { swapChain };
-	//	presentInfo.swapchainCount = 1;
-	//	presentInfo.pSwapchains = swapChains;
-	//	presentInfo.pImageIndices = &swapIndex;
-
-	//	presentInfo.pResults = nullptr; // Optional
-
-	//	VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
-	//	vkQueueWaitIdle(presentQueue);
-
-	//	OptimizeSwapchain(result);
-	//}
-
+	
 	void RecreateSwapChain() {
 		prepared = false;
 

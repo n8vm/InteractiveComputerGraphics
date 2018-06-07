@@ -1,0 +1,7 @@
+set (Standard_SRC
+	${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+	${CMAKE_CURRENT_SOURCE_DIR}/UniformColor.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Blinn.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Skybox.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Shadow.hpp
+	PARENT_SCOPE)
